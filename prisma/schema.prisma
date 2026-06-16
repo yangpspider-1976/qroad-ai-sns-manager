@@ -1,0 +1,195 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String            @id @default(cuid())
+  email       String            @unique
+  name        String
+  role        String            @default("operator")
+  createdAt   DateTime          @default(now())
+  workspaces  Workspace[]       @relation("WorkspaceOwner")
+  memberships WorkspaceMember[]
+  approvals   Approval[]        @relation("ReviewerApprovals")
+  auditLogs   AuditLog[]
+}
+
+model Workspace {
+  id             String            @id @default(cuid())
+  name           String
+  timezone       String            @default("Asia/Manila")
+  ownerId        String
+  status         String            @default("active")
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  owner          User              @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  members        WorkspaceMember[]
+  brandProfile   BrandProfile?
+  socialAccounts SocialAccount[]
+  briefs         ContentBrief[]
+  postDrafts     PostDraft[]
+  mediaAssets    MediaAsset[]
+  auditLogs      AuditLog[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+}
+
+model BrandProfile {
+  id              String    @id @default(cuid())
+  workspaceId     String    @unique
+  companyName     String
+  services        Json
+  targetAudience  String
+  tone            String
+  defaultCta      String
+  prohibitedTerms Json
+  languages       Json
+  coreMessage     String
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model SocialAccount {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  platform          String
+  accountName       String
+  externalAccountId String
+  tokenEncrypted    String
+  tokenExpiresAt    DateTime?
+  scopes            Json
+  createdAt         DateTime  @default(now())
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model ContentBrief {
+  id          String      @id @default(cuid())
+  workspaceId String
+  objective   String
+  audience    String
+  offer       String
+  language    String
+  platforms   Json
+  tone        String
+  contentType String
+  notes       String?
+  createdAt   DateTime    @default(now())
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  postDrafts  PostDraft[]
+}
+
+model PostDraft {
+  id           String       @id @default(cuid())
+  briefId      String
+  workspaceId  String
+  platform     String
+  caption      String
+  hashtags     Json
+  cta          String
+  imageText    Json
+  videoScript  Json
+  qualityScore Json
+  status       String       @default("draft")
+  scheduledAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  brief        ContentBrief @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mediaAssets  MediaAsset[]
+  approvals    Approval[]
+  publishJobs  PublishJob[]
+  publishLogs  PublishLog[]
+  postMetrics  PostMetric[]
+}
+
+model MediaAsset {
+  id          String    @id @default(cuid())
+  workspaceId String
+  postDraftId String
+  type        String
+  url         String
+  prompt      String?
+  width       Int
+  height      Int
+  status      String    @default("generated")
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  postDraft   PostDraft @relation(fields: [postDraftId], references: [id], onDelete: Cascade)
+}
+
+model Approval {
+  id          String    @id @default(cuid())
+  postDraftId String
+  reviewerId  String
+  status      String    @default("pending")
+  comment     String?
+  approvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  postDraft   PostDraft @relation(fields: [postDraftId], references: [id], onDelete: Cascade)
+  reviewer    User      @relation("ReviewerApprovals", fields: [reviewerId], references: [id])
+}
+
+model PublishJob {
+  id          String    @id @default(cuid())
+  postDraftId String
+  platform    String
+  runAt       DateTime
+  status      String    @default("queued")
+  retryCount  Int       @default(0)
+  error       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  postDraft   PostDraft @relation(fields: [postDraftId], references: [id], onDelete: Cascade)
+}
+
+model PublishLog {
+  id              String    @id @default(cuid())
+  postDraftId     String
+  platform        String
+  platformPostId  String?
+  status          String
+  requestPayload  Json?
+  responsePayload Json?
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+  postDraft       PostDraft @relation(fields: [postDraftId], references: [id], onDelete: Cascade)
+}
+
+model PostMetric {
+  id          String    @id @default(cuid())
+  postDraftId String
+  reach       Int       @default(0)
+  impressions Int       @default(0)
+  engagement  Int       @default(0)
+  comments    Int       @default(0)
+  clicks      Int       @default(0)
+  leads       Int       @default(0)
+  collectedAt DateTime  @default(now())
+  postDraft   PostDraft @relation(fields: [postDraftId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  userId      String
+  workspaceId String
+  action      String
+  entityType  String
+  entityId    String
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}

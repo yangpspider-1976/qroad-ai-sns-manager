@@ -1,0 +1,14 @@
+node_modules
+.next
+.next-dev
+.claude
+.env
+.env.local
+uploads/*
+!uploads/.gitkeep
+coverage
+tsconfig.tsbuildinfo
+prisma/*.db
+prisma/*.db-journal
+public/generated-assets/*
+public/uploaded-assets/*

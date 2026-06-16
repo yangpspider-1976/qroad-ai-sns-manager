@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #f6f7f9;
+  --color-panel: #ffffff;
+  --color-ink: #0f172a;
+  --color-muted: #64748b;
+  --color-line: #d7dce3;
+  --color-accent: #2563eb;
+  --color-accent-dark: #1d4ed8;
+  --color-warn: #b45309;
+  --color-danger: #b91c1c;
+  --color-ok: #15803d;
+  --font-sans: var(--font-inter, "Inter"), sans-serif;
+  --shadow-paper-edge: 0 5px 22px rgba(0, 0, 0, 0.04),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+@layer base {
+  :root {
+    --font-family: var(--font-inter, "Inter"), sans-serif;
+  }
+
+  * {
+    @apply box-border;
+  }
+
+  body {
+    @apply m-0 bg-bg text-[14px] text-ink;
+    font-family: var(--font-family);
+  }
+
+  a {
+    @apply text-inherit no-underline;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  label {
+    @apply grid gap-1.5 text-[13px] text-muted;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink;
+  }
+
+  textarea {
+    @apply min-h-[120px] resize-y;
+  }
+}
