@@ -1,13 +1,25 @@
 "use client";
 
-import { Check, ChevronDown, RotateCcw, X } from "lucide-react";
+import { Check, ChevronDown, Loader2, RotateCcw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DraftCard } from "@/components/draft-card";
 import { Shell } from "@/components/shell";
-import { Button, ConfirmationModal, Notice, Panel, fieldNoteClass, formActionsClass, sectionHeadingClass } from "@/components/ui";
+import { Button, ConfirmationModal, Modal, Notice, Panel, fieldNoteClass, formActionsClass, sectionHeadingClass } from "@/components/ui";
 import { useSelectedWorkspaceId } from "@/components/workspace-switcher";
 import { groupDraftsByBrief, platformListLabel } from "@/lib/draft-groups";
 import type { PostDraft, PostStatus } from "@/lib/types";
+
+type PlatformPublishResult = {
+  platform: string;
+  ok: boolean;
+  platformPostId?: string;
+  error?: string;
+};
+
+type PublishOutcome = {
+  ok: boolean;
+  results: PlatformPublishResult[];
+};
 
 function statusListLabel(statuses: PostStatus[]) {
   return statuses.map((status) => status.replaceAll("_", " ")).join(", ");
@@ -18,6 +30,8 @@ export default function ApprovalsPage() {
   const [drafts, setDrafts] = useState<PostDraft[]>([]);
   const [message, setMessage] = useState("Select an approval action to update the review queue.");
   const [pendingReject, setPendingReject] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishOutcome, setPublishOutcome] = useState<PublishOutcome | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
   const draftGroups = groupDraftsByBrief(drafts);
@@ -37,23 +51,6 @@ export default function ApprovalsPage() {
     }
     void loadDrafts();
   }, [selectedWorkspaceId]);
-
-  async function transitionDraft(id: string, status: PostStatus, comment: string) {
-    const approvalStatus =
-      status === "approved" ? "approved" : status === "revision_requested" ? "changes_requested" : "rejected";
-    const response = await fetch(`/api/post-drafts/${id}/approval`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: approvalStatus, comment })
-    });
-    if (!response.ok) {
-      setMessage("Approval update failed.");
-      return;
-    }
-    const data = await response.json();
-    setDrafts((current) => current.map((draft) => (draft.id === id ? data.draft : draft)));
-    setMessage(`${comment} Approval history and audit log were saved.`);
-  }
 
   async function transitionDraftGroup(status: PostStatus, comment: string) {
     if (!selectedGroup) return;
@@ -112,7 +109,10 @@ export default function ApprovalsPage() {
       setMessage("This draft set has no publishable platform variant.");
       return;
     }
-    const results = await Promise.all(
+
+    setIsPublishing(true);
+
+    const rawResults = await Promise.all(
       publishableDrafts.map(async (draft) => {
         const response = await fetch(`/api/publish/${draft.platform}`, {
           method: "POST",
@@ -124,18 +124,25 @@ export default function ApprovalsPage() {
       })
     );
 
-    const failed = results.filter((result) => !result.ok);
-    if (failed.length > 0) {
-      setMessage(failed[0].result.result?.error ?? failed[0].result.error ?? "Publish now failed.");
-      return;
-    }
+    setIsPublishing(false);
 
-    setDrafts((current) =>
-      current.map((draft) =>
-        publishableDrafts.some((selectedDraft) => selectedDraft.id === draft.id) ? { ...draft, status: "published" } : draft
-      )
-    );
-    setMessage("Published available platform variants.");
+    const platformResults: PlatformPublishResult[] = rawResults.map(({ draft, ok, result }) => ({
+      platform: draft.platform,
+      ok,
+      platformPostId: ok ? (result.result?.platformPostId ?? undefined) : undefined,
+      error: ok ? undefined : (result.error ?? "Publish failed.")
+    }));
+
+    const allOk = platformResults.every((r) => r.ok);
+    setPublishOutcome({ ok: allOk, results: platformResults });
+
+    if (allOk) {
+      setDrafts((current) =>
+        current.map((draft) =>
+          publishableDrafts.some((d) => d.id === draft.id) ? { ...draft, status: "published" } : draft
+        )
+      );
+    }
   }
 
   return (
@@ -217,6 +224,7 @@ export default function ApprovalsPage() {
         ) : (
           <Notice className="mb-4">No drafts are available for approval in this workspace.</Notice>
         )}
+        {message ? <Notice className="mt-2">{message}</Notice> : null}
       </Panel>
       {pendingReject && selectedGroup ? (
         <ConfirmationModal
@@ -230,6 +238,51 @@ export default function ApprovalsPage() {
           subtitle={`${selectedGroup.title} will be removed from active approval work.`}
           title="Reject draft"
         />
+      ) : null}
+      {isPublishing ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(16,35,31,0.42)] p-6">
+          <div className="flex w-[min(380px,100%)] flex-col items-center gap-5 rounded-lg bg-white text-center shadow-[0_18px_60px_rgba(16,35,31,0.22)]" style={{ padding: "40px" }}>
+            <Loader2 className="animate-spin text-accent" size={44} />
+            <div>
+              <div className="text-lg font-semibold text-ink">Publishing...</div>
+              <div className="mt-1 text-sm text-muted">Please wait while your content is being sent to the selected platform.</div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {publishOutcome ? (
+        <Modal
+          title={publishOutcome.ok ? "Published successfully" : "Some platforms failed"}
+          subtitle={publishOutcome.ok ? "Your content is now live on all selected platforms." : "Review the results below."}
+          onClose={() => setPublishOutcome(null)}
+          footer={<Button onClick={() => setPublishOutcome(null)} type="button">Close</Button>}
+        >
+          <div className="flex flex-col gap-3">
+            {publishOutcome.results.map((result) => (
+              <div
+                key={result.platform}
+                className={result.ok
+                  ? "flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-3"
+                  : "flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3"}
+              >
+                {result.ok ? (
+                  <Check className="mt-0.5 shrink-0 text-green-700" size={16} />
+                ) : (
+                  <X className="mt-0.5 shrink-0 text-red-700" size={16} />
+                )}
+                <div>
+                  <div className="font-semibold capitalize">{result.platform}</div>
+                  {result.ok && result.platformPostId ? (
+                    <div className="mt-0.5 text-xs text-muted">Post ID: {result.platformPostId}</div>
+                  ) : null}
+                  {!result.ok && result.error ? (
+                    <div className="mt-0.5 text-xs text-red-700">{result.error}</div>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Modal>
       ) : null}
     </Shell>
   );
