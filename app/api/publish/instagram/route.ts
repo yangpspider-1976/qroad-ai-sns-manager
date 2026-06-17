@@ -76,8 +76,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const asset = dbDraft.mediaAssets[0];
-  if (!asset) {
+  if (!dbDraft.mediaAssets.length) {
     return NextResponse.json({ error: "Upload an image before publishing to Instagram." }, { status: 409 });
   }
 
@@ -85,12 +84,12 @@ export async function POST(request: Request) {
   const user = await getDemoUser();
 
   try {
-    const imageUrl = absolutePublicUrl(asset.url, request.url);
+    const imageUrls = dbDraft.mediaAssets.map((a) => absolutePublicUrl(a.url, request.url));
     const published = await publishInstagramBusinessImagePost({
       postDraft: draft,
       instagramUserId: account.externalAccountId,
       accessToken: account.tokenEncrypted,
-      imageUrl
+      imageUrls
     });
 
     const [log] = await prisma.$transaction([
@@ -106,7 +105,7 @@ export async function POST(request: Request) {
             endpoint: "/media_publish",
             instagramUserId: account.externalAccountId,
             accountName: account.accountName,
-            imageUrl
+            imageUrls
           },
           responsePayload: published
         }
