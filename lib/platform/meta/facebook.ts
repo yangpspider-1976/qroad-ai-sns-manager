@@ -237,6 +237,28 @@ export async function publishFacebookTextPost({ postDraft, pageId, pageAccessTok
   return body as { id: string };
 }
 
+export async function publishFacebookPhotoPost({
+  postDraft,
+  pageId,
+  pageAccessToken,
+  imageUrl
+}: FacebookPublishInput & { imageUrl: string }) {
+  const response = await fetch(graphUrl(`/${pageId}/photos`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      access_token: pageAccessToken,
+      url: imageUrl,
+      message: [postDraft.caption, postDraft.hashtags.join(" ")].filter(Boolean).join("\n\n")
+    })
+  });
+  const body = await response.json();
+  if (!response.ok || !body.id) {
+    throw new Error(body.error?.message ?? "Facebook photo publishing failed.");
+  }
+  return body as { id: string; post_id?: string };
+}
+
 export async function publishInstagramImagePost({ postDraft, instagramUserId, pageAccessToken, imageUrl }: InstagramPublishInput) {
   const caption = [postDraft.caption, postDraft.hashtags.join(" ")].filter(Boolean).join("\n\n");
   const createResponse = await fetch(graphUrl(`/${instagramUserId}/media`), {

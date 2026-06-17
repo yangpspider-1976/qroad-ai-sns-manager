@@ -21,6 +21,7 @@ type InstagramAccount = {
   instagramId: string;
   username: string;
   active: boolean;
+  enabled: boolean;
   tokenExpiresAt: string | null;
   scopes: unknown;
 };
@@ -177,6 +178,36 @@ export function IntegrationsClient({
       setMessage(params.get("message") ?? "TikTok connection failed.");
     }
   }, []);
+
+  async function deleteInstagramAccount(accountId: string) {
+    const response = await fetch("/api/integrations/instagram/accounts", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId: selectedWorkspaceId, accountId })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage(result.error ?? "Unable to disconnect Instagram account.");
+      return;
+    }
+    setMessage("Instagram account disconnected.");
+    await loadMetaAccounts();
+  }
+
+  async function toggleInstagramEnabled(accountId: string, enabled: boolean) {
+    const response = await fetch("/api/integrations/instagram/accounts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId: selectedWorkspaceId, accountId, enabled })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage(result.error ?? "Unable to update Instagram account.");
+      return;
+    }
+    setMessage(`Instagram account ${enabled ? "enabled" : "disabled"} for posting.`);
+    await loadMetaAccounts();
+  }
 
   async function deleteTikTokAccount(accountId: string) {
     const response = await fetch("/api/integrations/tiktok/accounts", {
@@ -444,18 +475,41 @@ export function IntegrationsClient({
                   key={account.id}
                 >
                   <div>
-                    <div className="font-semibold">@{account.username}</div>
+                    <div className="font-semibold">
+                      @{account.username}
+                      {!account.enabled && (
+                        <span className="ml-2 inline-flex items-center rounded-full bg-[#fef3c7] px-2 py-0.5 text-xs font-bold text-warn">
+                          Disabled
+                        </span>
+                      )}
+                    </div>
                     <div className={fieldNoteClass}>Instagram ID: {account.instagramId}</div>
                   </div>
-                  {account.active ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#dcfce7] px-2 py-1 text-xs font-bold text-ok">
-                      <Check size={14} /> Selected
-                    </span>
-                  ) : (
-                    <Button onClick={() => void selectMetaAccount(account.id, "instagram")} type="button" variant="secondary">
-                      Select account
+                  <div className="flex flex-wrap items-center gap-2">
+                    {account.active ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#dcfce7] px-2 py-1 text-xs font-bold text-ok">
+                        <Check size={14} /> Selected
+                      </span>
+                    ) : (
+                      <Button onClick={() => void selectMetaAccount(account.id, "instagram")} type="button" variant="secondary">
+                        Select account
+                      </Button>
+                    )}
+                    <Button
+                      onClick={() => void toggleInstagramEnabled(account.id, !account.enabled)}
+                      type="button"
+                      variant="secondary"
+                    >
+                      {account.enabled ? "Disable" : "Enable"}
                     </Button>
-                  )}
+                    <Button
+                      onClick={() => { if (confirm(`Disconnect @${account.username} from this workspace?`)) void deleteInstagramAccount(account.id); }}
+                      type="button"
+                      variant="secondary"
+                    >
+                      Disconnect
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
