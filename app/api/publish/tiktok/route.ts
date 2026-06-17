@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { mapPostDraft } from "@/lib/db/mappers";
 import { getDemoUser, prisma } from "@/lib/db/prisma";
-import { uploadTikTokPhotoPost } from "@/lib/platform/tiktok/tiktok";
+import { fetchTikTokCreatorInfo, uploadTikTokPhotoPost } from "@/lib/platform/tiktok/tiktok";
 
 const publishSchema = z.object({
   postDraftId: z.string()
@@ -27,6 +27,42 @@ function buildTitle(draft: ReturnType<typeof mapPostDraft>) {
 
 function buildDescription(draft: ReturnType<typeof mapPostDraft>) {
   return [draft.caption, draft.hashtags.join(" ")].filter(Boolean).join("\n\n");
+}
+
+function tiktokPostMode() {
+  return process.env.TIKTOK_POST_MODE === "MEDIA_UPLOAD" ? "MEDIA_UPLOAD" : "DIRECT_POST";
+}
+
+function scopeList(scopes: unknown) {
+  if (typeof scopes !== "object" || scopes === null || Array.isArray(scopes)) return [];
+  const grantedScopes = (scopes as { grantedScopes?: unknown }).grantedScopes;
+  if (Array.isArray(grantedScopes)) return grantedScopes.filter((scope): scope is string => typeof scope === "string");
+  if (typeof grantedScopes === "string") {
+    return grantedScopes
+      .split(/[,\s]+/)
+      .map((scope) => scope.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function preferredPrivacyLevel(options: string[]) {
+  const configured = process.env.TIKTOK_PRIVACY_LEVEL?.trim();
+  if (configured && options.includes(configured)) return configured;
+  if (options.includes("SELF_ONLY")) return "SELF_ONLY";
+  if (options.includes("PUBLIC_TO_EVERYONE")) return "PUBLIC_TO_EVERYONE";
+  return options[0];
+}
+
+function explainTikTokError(message: string, imageUrl?: string) {
+  if (message.toLowerCase().includes("url ownership verification")) {
+    const origin = imageUrl ? new URL(imageUrl).origin : process.env.APP_URL;
+    return `TikTok rejected the image URL because ${origin} is not verified in the TikTok developer app URL properties. Add the domain or URL prefix in TikTok Developer Portal, or use a verified permanent asset host.`;
+  }
+  if (message.toLowerCase().includes("content-sharing-guidelines")) {
+    return "TikTok rejected the Direct Post request against its content sharing guidelines. For unaudited apps, use SELF_ONLY privacy and make sure the connected TikTok account is private while testing. After changing privacy or account visibility, try publishing again.";
+  }
+  return message;
 }
 
 export async function POST(request: Request) {
@@ -74,16 +110,43 @@ export async function POST(request: Request) {
 
   const draft = mapPostDraft(dbDraft);
   const user = await getDemoUser();
+  const postMode = tiktokPostMode();
+  const grantedScopes = scopeList(account.scopes);
+  let imageUrl: string;
 
   try {
-    const imageUrl = absolutePublicUrl(asset.url, request.url);
+    imageUrl = absolutePublicUrl(asset.url, request.url);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "TikTok image URL validation failed.";
+    return NextResponse.json({ error: message }, { status: 409 });
+  }
+
+  try {
     const title = buildTitle(draft);
     const description = buildDescription(draft);
+    if (postMode === "DIRECT_POST" && !grantedScopes.includes("video.publish")) {
+      throw new Error("TikTok Direct Post requires reconnecting TikTok with the video.publish scope.");
+    }
+
+    const creatorInfo = postMode === "DIRECT_POST" ? await fetchTikTokCreatorInfo(account.tokenEncrypted) : null;
+    const privacyLevel =
+      postMode === "DIRECT_POST" ? preferredPrivacyLevel(creatorInfo?.privacy_level_options ?? []) : undefined;
+
+    if (postMode === "DIRECT_POST" && !privacyLevel) {
+      throw new Error("TikTok did not return any valid privacy level options for Direct Post.");
+    }
+
     const published = await uploadTikTokPhotoPost({
       accessToken: account.tokenEncrypted,
       title,
       description,
-      imageUrls: [imageUrl]
+      imageUrls: [imageUrl],
+      postMode,
+      privacyLevel,
+      disableComment: creatorInfo?.comment_disabled ?? false,
+      autoAddMusic: process.env.TIKTOK_AUTO_ADD_MUSIC === "true",
+      brandContentToggle: process.env.TIKTOK_BRAND_CONTENT === "true",
+      brandOrganicToggle: process.env.TIKTOK_BRAND_ORGANIC === "true"
     });
 
     const [log] = await prisma.$transaction([
@@ -97,13 +160,16 @@ export async function POST(request: Request) {
             live: true,
             provider: "tiktok",
             endpoint: "/v2/post/publish/content/init/",
-            postMode: "MEDIA_UPLOAD",
+            postMode,
             mediaType: "PHOTO",
             accountName: account.accountName,
             accountId: account.externalAccountId,
             title,
             description,
-            imageUrls: [imageUrl]
+            imageUrls: [imageUrl],
+            privacyLevel,
+            creatorUsername: creatorInfo?.creator_username,
+            creatorNickname: creatorInfo?.creator_nickname
           },
           responsePayload: published.raw as Prisma.InputJsonValue
         }
@@ -119,7 +185,7 @@ export async function POST(request: Request) {
           action: "publish.tiktok.success",
           entityType: "PostDraft",
           entityId: draft.id,
-          metadata: { publishId: published.publishId, accountId: account.externalAccountId, postMode: "MEDIA_UPLOAD" }
+          metadata: { publishId: published.publishId, accountId: account.externalAccountId, postMode, privacyLevel }
         }
       })
     ]);
@@ -129,7 +195,8 @@ export async function POST(request: Request) {
       log
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "TikTok publishing failed.";
+    const rawMessage = error instanceof Error ? error.message : "TikTok publishing failed.";
+    const message = explainTikTokError(rawMessage, imageUrl);
     const [log] = await prisma.$transaction([
       prisma.publishLog.create({
         data: {
@@ -140,17 +207,14 @@ export async function POST(request: Request) {
             live: true,
             provider: "tiktok",
             endpoint: "/v2/post/publish/content/init/",
-            postMode: "MEDIA_UPLOAD",
+            postMode,
             mediaType: "PHOTO",
             accountName: account.accountName,
-            accountId: account.externalAccountId
+            accountId: account.externalAccountId,
+            imageUrls: [imageUrl]
           },
           errorMessage: message
         }
-      }),
-      prisma.postDraft.update({
-        where: { id: draft.id },
-        data: { status: "failed" }
       }),
       prisma.auditLog.create({
         data: {

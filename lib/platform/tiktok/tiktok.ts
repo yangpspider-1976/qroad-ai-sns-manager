@@ -10,12 +10,29 @@ type TikTokPhotoUploadInput = {
   title: string;
   description: string;
   imageUrls: string[];
+  postMode?: "DIRECT_POST" | "MEDIA_UPLOAD";
+  privacyLevel?: string;
+  disableComment?: boolean;
+  autoAddMusic?: boolean;
+  brandContentToggle?: boolean;
+  brandOrganicToggle?: boolean;
 };
 
 export type TikTokPhotoUploadResult = {
   publishId: string;
   uploadUrl?: string;
   raw: unknown;
+};
+
+export type TikTokCreatorInfo = {
+  creator_avatar_url?: string;
+  creator_username?: string;
+  creator_nickname?: string;
+  privacy_level_options?: string[];
+  comment_disabled?: boolean;
+  duet_disabled?: boolean;
+  stitch_disabled?: boolean;
+  max_video_post_duration_sec?: number;
 };
 
 function tiktokApiUrl(path: string) {
@@ -30,7 +47,7 @@ export function tiktokConfigStatus() {
 }
 
 export function tiktokOAuthScopes() {
-  const raw = process.env.TIKTOK_SCOPES || "user.info.basic,video.upload";
+  const raw = process.env.TIKTOK_SCOPES || "user.info.basic,video.upload,video.publish";
   return raw
     .split(",")
     .map((s) => s.trim())
@@ -106,13 +123,46 @@ export function buildTikTokPhotoPostInfo(title: string, description: string) {
   };
 }
 
+export async function fetchTikTokCreatorInfo(accessToken: string): Promise<TikTokCreatorInfo> {
+  const response = await fetch(tiktokApiUrl("/v2/post/publish/creator_info/query/"), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json; charset=UTF-8"
+    },
+    cache: "no-store"
+  } as RequestInit);
+  const body = await response.json();
+  if (!response.ok || body.error?.code !== "ok") {
+    throw new Error(body.error?.message ?? "TikTok creator info fetch failed.");
+  }
+  return body.data as TikTokCreatorInfo;
+}
+
 export async function uploadTikTokPhotoPost({
   accessToken,
   title,
   description,
-  imageUrls
+  imageUrls,
+  postMode = "MEDIA_UPLOAD",
+  privacyLevel,
+  disableComment,
+  autoAddMusic,
+  brandContentToggle,
+  brandOrganicToggle
 }: TikTokPhotoUploadInput): Promise<TikTokPhotoUploadResult> {
-  const postInfo = buildTikTokPhotoPostInfo(title, description);
+  const postInfo = {
+    ...buildTikTokPhotoPostInfo(title, description),
+    ...(postMode === "DIRECT_POST"
+      ? {
+          privacy_level: privacyLevel,
+          disable_comment: Boolean(disableComment),
+          auto_add_music: Boolean(autoAddMusic),
+          brand_content_toggle: Boolean(brandContentToggle),
+          brand_organic_toggle: Boolean(brandOrganicToggle)
+        }
+      : {})
+  };
   const response = await fetch(tiktokApiUrl("/v2/post/publish/content/init/"), {
     method: "POST",
     headers: {
@@ -121,7 +171,7 @@ export async function uploadTikTokPhotoPost({
     },
     body: JSON.stringify({
       media_type: "PHOTO",
-      post_mode: "MEDIA_UPLOAD",
+      post_mode: postMode,
       post_info: postInfo,
       source_info: {
         source: "PULL_FROM_URL",
