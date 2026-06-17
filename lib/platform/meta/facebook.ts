@@ -259,6 +259,41 @@ export async function publishFacebookPhotoPost({
   return body as { id: string; post_id?: string };
 }
 
+export async function publishFacebookMultiPhotoPost({
+  postDraft,
+  pageId,
+  pageAccessToken,
+  imageUrls
+}: FacebookPublishInput & { imageUrls: string[] }) {
+  // Upload each photo as unpublished to get photo IDs
+  const photoIds = await Promise.all(
+    imageUrls.map(async (url) => {
+      const res = await fetch(graphUrl(`/${pageId}/photos`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: pageAccessToken, url, published: false })
+      });
+      const body = await res.json();
+      if (!res.ok || !body.id) throw new Error(body.error?.message ?? "Facebook photo upload failed.");
+      return body.id as string;
+    })
+  );
+
+  // Post to feed with all photos attached
+  const response = await fetch(graphUrl(`/${pageId}/feed`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      access_token: pageAccessToken,
+      message: [postDraft.caption, postDraft.hashtags.join(" ")].filter(Boolean).join("\n\n"),
+      attached_media: photoIds.map((id) => ({ media_fbid: id }))
+    })
+  });
+  const body = await response.json();
+  if (!response.ok || !body.id) throw new Error(body.error?.message ?? "Facebook multi-photo publishing failed.");
+  return body as { id: string; post_id?: string };
+}
+
 export async function publishInstagramImagePost({ postDraft, instagramUserId, pageAccessToken, imageUrl }: InstagramPublishInput) {
   const caption = [postDraft.caption, postDraft.hashtags.join(" ")].filter(Boolean).join("\n\n");
   const createResponse = await fetch(graphUrl(`/${instagramUserId}/media`), {

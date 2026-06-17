@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { mapPostDraft } from "@/lib/db/mappers";
 import { getDemoUser, prisma } from "@/lib/db/prisma";
-import { publishFacebookPhotoPost, publishFacebookTextPost } from "@/lib/platform/meta/facebook";
+import { publishFacebookMultiPhotoPost, publishFacebookPhotoPost, publishFacebookTextPost } from "@/lib/platform/meta/facebook";
 
 const publishSchema = z.object({
   postDraftId: z.string()
@@ -57,22 +57,30 @@ export async function POST(request: Request) {
 
   const draft = mapPostDraft(dbDraft);
   const user = await getDemoUser();
-  const asset = dbDraft.mediaAssets[0];
-  const imageUrl = asset ? absolutePublicUrl(asset.url, request.url) : null;
+  const assets = dbDraft.mediaAssets;
+  const imageUrls = assets.map((a) => absolutePublicUrl(a.url, request.url)).filter((u): u is string => u !== null);
 
   try {
-    const published = imageUrl
-      ? await publishFacebookPhotoPost({
-          postDraft: draft,
-          pageId: account.externalAccountId,
-          pageAccessToken: account.tokenEncrypted,
-          imageUrl
-        })
-      : await publishFacebookTextPost({
-          postDraft: draft,
-          pageId: account.externalAccountId,
-          pageAccessToken: account.tokenEncrypted
-        });
+    const published =
+      imageUrls.length > 1
+        ? await publishFacebookMultiPhotoPost({
+            postDraft: draft,
+            pageId: account.externalAccountId,
+            pageAccessToken: account.tokenEncrypted,
+            imageUrls
+          })
+        : imageUrls.length === 1
+          ? await publishFacebookPhotoPost({
+              postDraft: draft,
+              pageId: account.externalAccountId,
+              pageAccessToken: account.tokenEncrypted,
+              imageUrl: imageUrls[0]
+            })
+          : await publishFacebookTextPost({
+              postDraft: draft,
+              pageId: account.externalAccountId,
+              pageAccessToken: account.tokenEncrypted
+            });
 
     const platformPostId = published.post_id ?? published.id;
 
@@ -86,10 +94,10 @@ export async function POST(request: Request) {
           requestPayload: {
             live: true,
             provider: "meta",
-            endpoint: imageUrl ? "/photos" : "/feed",
+            endpoint: imageUrls.length > 0 ? (imageUrls.length > 1 ? "/feed (multi-photo)" : "/photos") : "/feed",
             pageId: account.externalAccountId,
             pageName: account.accountName,
-            imageUrl: imageUrl ?? undefined,
+            imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
             message: [draft.caption, draft.hashtags.join(" ")].filter(Boolean).join("\n\n")
           },
           responsePayload: published
