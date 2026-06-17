@@ -56,14 +56,18 @@ export async function GET(request: Request) {
       tokenExpiresAt: account.tokenExpiresAt?.toISOString() ?? null,
       scopes: account.scopes
     })),
-    instagramAccounts: instagramAccounts.map((account) => ({
-      id: account.id,
-      instagramId: account.externalAccountId,
-      username: account.accountName,
-      active: account.platform === "instagram",
-      tokenExpiresAt: account.tokenExpiresAt?.toISOString() ?? null,
-      scopes: account.scopes
-    }))
+    instagramAccounts: instagramAccounts.map((account) => {
+      const scopesObj = (account.scopes as Record<string, unknown>) ?? {};
+      return {
+        id: account.id,
+        instagramId: account.externalAccountId,
+        username: account.accountName,
+        active: account.platform === "instagram",
+        enabled: scopesObj.enabled !== false,
+        tokenExpiresAt: account.tokenExpiresAt?.toISOString() ?? null,
+        scopes: account.scopes
+      };
+    })
   });
 }
 

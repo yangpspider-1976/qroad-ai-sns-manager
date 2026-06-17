@@ -158,32 +158,49 @@ export async function publishInstagramBusinessImagePost({
   imageUrl
 }: InstagramPublishInput) {
   const caption = [postDraft.caption, postDraft.hashtags.join(" ")].filter(Boolean).join("\n\n");
+
   const createResponse = await fetch(graphInstagramUrl(`/${instagramUserId}/media`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      access_token: accessToken,
-      image_url: imageUrl,
-      caption
-    })
+    body: JSON.stringify({ access_token: accessToken, image_url: imageUrl, caption })
   });
   const createBody = await createResponse.json();
   if (!createResponse.ok || !createBody.id) {
     throw new Error(createBody.error?.message ?? "Instagram media container creation failed.");
   }
 
+  const containerId = createBody.id as string;
+
+  // Poll until container is FINISHED (Instagram processes images asynchronously)
+  let ready = false;
+  for (let i = 0; i < 12; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const statusRes = await fetch(
+      graphInstagramUrl(`/${containerId}?fields=status_code&access_token=${encodeURIComponent(accessToken)}`),
+      { cache: "no-store" }
+    );
+    const statusBody = await statusRes.json();
+    if (statusBody.status_code === "FINISHED") {
+      ready = true;
+      break;
+    }
+    if (statusBody.status_code === "ERROR") {
+      throw new Error(statusBody.error?.message ?? "Instagram media container processing failed.");
+    }
+  }
+  if (!ready) {
+    throw new Error("Instagram media container timed out while processing. Try again.");
+  }
+
   const publishResponse = await fetch(graphInstagramUrl(`/${instagramUserId}/media_publish`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      access_token: accessToken,
-      creation_id: createBody.id
-    })
+    body: JSON.stringify({ access_token: accessToken, creation_id: containerId })
   });
   const publishBody = await publishResponse.json();
   if (!publishResponse.ok || !publishBody.id) {
     throw new Error(publishBody.error?.message ?? "Instagram publishing failed.");
   }
 
-  return { id: publishBody.id as string, creationId: createBody.id as string };
+  return { id: publishBody.id as string, creationId: containerId };
 }

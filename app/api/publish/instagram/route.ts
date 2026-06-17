@@ -68,6 +68,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Connect and select an Instagram account in Integrations before publishing." }, { status: 409 });
   }
 
+  const accountScopes = (account.scopes as Record<string, unknown>) ?? {};
+  if (accountScopes.enabled === false) {
+    return NextResponse.json(
+      { error: "This Instagram account is disabled for posting. Enable it in Integrations to publish." },
+      { status: 409 }
+    );
+  }
+
   const asset = dbDraft.mediaAssets[0];
   if (!asset) {
     return NextResponse.json({ error: "Upload an image before publishing to Instagram." }, { status: 409 });
