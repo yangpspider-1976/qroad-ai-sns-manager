@@ -2,11 +2,20 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { mapPostDraft } from "@/lib/db/mappers";
 import { getDemoUser, prisma } from "@/lib/db/prisma";
-import { publishFacebookTextPost } from "@/lib/platform/meta/facebook";
+import { publishFacebookPhotoPost, publishFacebookTextPost } from "@/lib/platform/meta/facebook";
 
 const publishSchema = z.object({
   postDraftId: z.string()
 });
+
+function absolutePublicUrl(pathOrUrl: string, requestUrl: string) {
+  const appUrl = process.env.APP_URL || new URL(requestUrl).origin;
+  const url = new URL(pathOrUrl, appUrl);
+  if (url.protocol !== "https:" || ["localhost", "127.0.0.1"].includes(url.hostname)) {
+    return null;
+  }
+  return url.toString();
+}
 
 export async function POST(request: Request) {
   const parsed = publishSchema.safeParse(await request.json());
@@ -15,7 +24,13 @@ export async function POST(request: Request) {
   }
 
   const dbDraft = await prisma.postDraft.findUnique({
-    where: { id: parsed.data.postDraftId }
+    where: { id: parsed.data.postDraftId },
+    include: {
+      mediaAssets: {
+        where: { type: "image" },
+        orderBy: { createdAt: "desc" }
+      }
+    }
   });
   if (!dbDraft) {
     return NextResponse.json({ error: "Post draft not found." }, { status: 404 });
@@ -42,27 +57,39 @@ export async function POST(request: Request) {
 
   const draft = mapPostDraft(dbDraft);
   const user = await getDemoUser();
+  const asset = dbDraft.mediaAssets[0];
+  const imageUrl = asset ? absolutePublicUrl(asset.url, request.url) : null;
 
   try {
-    const published = await publishFacebookTextPost({
-      postDraft: draft,
-      pageId: account.externalAccountId,
-      pageAccessToken: account.tokenEncrypted
-    });
+    const published = imageUrl
+      ? await publishFacebookPhotoPost({
+          postDraft: draft,
+          pageId: account.externalAccountId,
+          pageAccessToken: account.tokenEncrypted,
+          imageUrl
+        })
+      : await publishFacebookTextPost({
+          postDraft: draft,
+          pageId: account.externalAccountId,
+          pageAccessToken: account.tokenEncrypted
+        });
+
+    const platformPostId = published.post_id ?? published.id;
 
     const [log] = await prisma.$transaction([
       prisma.publishLog.create({
         data: {
           postDraftId: draft.id,
           platform: "facebook",
-          platformPostId: published.id,
+          platformPostId,
           status: "success",
           requestPayload: {
             live: true,
             provider: "meta",
-            endpoint: "/feed",
+            endpoint: imageUrl ? "/photos" : "/feed",
             pageId: account.externalAccountId,
             pageName: account.accountName,
+            imageUrl: imageUrl ?? undefined,
             message: [draft.caption, draft.hashtags.join(" ")].filter(Boolean).join("\n\n")
           },
           responsePayload: published
@@ -79,13 +106,13 @@ export async function POST(request: Request) {
           action: "publish.facebook.success",
           entityType: "PostDraft",
           entityId: draft.id,
-          metadata: { platformPostId: published.id, pageId: account.externalAccountId }
+          metadata: { platformPostId, pageId: account.externalAccountId }
         }
       })
     ]);
 
     return NextResponse.json({
-      result: { ok: true, platformPostId: published.id },
+      result: { ok: true, platformPostId },
       log
     });
   } catch (error) {

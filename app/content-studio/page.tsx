@@ -38,6 +38,7 @@ const offerOptions = [
 
 const platformOptions: { label: string; value: Platform[] }[] = [
   { label: "Facebook, Instagram, and Tiktok", value: ["facebook", "instagram", "tiktok"] },
+  { label: "Facebook and Instagram", value: ["facebook", "instagram"] },
   { label: "Facebook only", value: ["facebook"] },
   { label: "Instagram only", value: ["instagram"] },
   { label: "Tiktok only", value: ["tiktok"] }

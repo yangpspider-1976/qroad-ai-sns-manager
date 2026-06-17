@@ -143,6 +143,12 @@ export function DraftCard({
   }, [selectedImages]);
 
   async function saveDraft() {
+    const hadPendingImages = selectedImages.length > 0;
+    if (hadPendingImages) {
+      const uploaded = await uploadImages();
+      if (!uploaded) return;
+    }
+
     const response = await fetch(`/api/post-drafts/brief/${draft.briefId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -154,7 +160,7 @@ export function DraftCard({
           .filter(Boolean)
       })
     });
-    setMessage(response.ok ? "Draft saved to database." : "Draft save failed.");
+    setMessage(response.ok ? `Draft${hadPendingImages ? " and images" : ""} saved to database.` : "Draft save failed.");
   }
 
   function updateCaption(value: string) {
@@ -186,7 +192,8 @@ export function DraftCard({
   }
 
   async function uploadImages() {
-    if (!isPersistedDraft || activeDraft.id.startsWith("preview_") || selectedImages.length === 0) return;
+    if (!isPersistedDraft || activeDraft.id.startsWith("preview_") || selectedImages.length === 0) return false;
+    const uploadCount = selectedImages.length;
     setIsUploadingAssets(true);
     const formData = new FormData();
     formData.append("workspaceId", activeDraft.workspaceId);
@@ -205,7 +212,7 @@ export function DraftCard({
     setIsUploadingAssets(false);
     if (!response.ok) {
       setMessage(result.error ?? "Image upload failed.");
-      return;
+      return false;
     }
 
     const assetResponse = await fetch(`/api/media-assets?workspaceId=${draft.workspaceId}&briefId=${draft.briefId}`);
@@ -221,8 +228,9 @@ export function DraftCard({
       fileInputRef.current.value = "";
     }
     setMessage(
-      `Uploaded ${selectedImages.length} image${selectedImages.length === 1 ? "" : "s"} for ${platformDraftOptions.length} platform preview${platformDraftOptions.length === 1 ? "" : "s"}.`
+      `Uploaded ${uploadCount} image${uploadCount === 1 ? "" : "s"} for ${platformDraftOptions.length} platform preview${platformDraftOptions.length === 1 ? "" : "s"}.`
     );
+    return true;
   }
 
   async function removeUploadedImages() {
