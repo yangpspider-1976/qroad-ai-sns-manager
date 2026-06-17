@@ -21,7 +21,7 @@ export function buttonClass(variant: ButtonProps["variant"] = "primary") {
   const base =
     "inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 font-medium leading-[1.2] no-underline disabled:cursor-not-allowed disabled:opacity-70";
   if (variant === "secondary") return `${base} border-line bg-white text-ink hover:border-slate-300 hover:bg-[#f8fafc]`;
-  if (variant === "danger") return `${base} border-danger bg-danger text-white hover:border-[#991b1b] hover:bg-[#991b1b]`;
+  if (variant === "danger") return `${base} border-red-300 bg-white text-danger hover:border-[#991b1b] hover:bg-red-50`;
   return `${base} border-accent bg-accent text-white hover:bg-accent-dark`;
 }
 

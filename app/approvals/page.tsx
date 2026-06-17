@@ -34,10 +34,27 @@ export default function ApprovalsPage() {
   const [publishOutcome, setPublishOutcome] = useState<PublishOutcome | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
+  const [selectedGroupHasImage, setSelectedGroupHasImage] = useState(false);
   const draftGroups = groupDraftsByBrief(drafts);
   const selectedGroup = draftGroups.find((group) => group.id === selectedGroupId);
   const selectedDraft = selectedGroup?.drafts[0];
   const selectedGroupApproved = selectedGroup?.drafts.every((draft) => draft.status === "approved" || draft.status === "scheduled") ?? false;
+  const selectedGroupRequiresImage = selectedGroup?.drafts.some((draft) => ["instagram", "tiktok"].includes(draft.platform)) ?? false;
+  const publishBlocked = selectedGroupRequiresImage && !selectedGroupHasImage;
+
+  useEffect(() => {
+    async function loadAssets() {
+      if (!selectedGroup || !selectedWorkspaceId) {
+        setSelectedGroupHasImage(false);
+        return;
+      }
+      const response = await fetch(`/api/media-assets?workspaceId=${selectedWorkspaceId}&briefId=${selectedGroup.id}`);
+      if (!response.ok) { setSelectedGroupHasImage(false); return; }
+      const data = await response.json();
+      setSelectedGroupHasImage(Array.isArray(data.assets) && data.assets.length > 0);
+    }
+    void loadAssets();
+  }, [selectedGroupId, selectedWorkspaceId]);
 
   useEffect(() => {
     async function loadDrafts() {
@@ -206,9 +223,12 @@ export default function ApprovalsPage() {
               <Button onClick={() => void transitionDraftGroup("approved", "approved.")} type="button">
                 <Check size={16} /> Approve draft set
               </Button>
-              <Button disabled={!selectedGroupApproved} onClick={() => void publishDraftGroupNow()} type="button" variant="secondary">
+              <Button disabled={!selectedGroupApproved || publishBlocked} onClick={() => void publishDraftGroupNow()} type="button" variant="secondary">
                 Publish now
               </Button>
+              {publishBlocked ? (
+                <span className={fieldNoteClass}>Upload an image first — Instagram and TikTok require one before publishing.</span>
+              ) : null}
               <Button
                 onClick={() => void transitionDraftGroup("revision_requested", "sent back for revision.")}
                 variant="secondary"
