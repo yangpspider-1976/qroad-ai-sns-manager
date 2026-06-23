@@ -127,6 +127,10 @@ export function buildMetaOAuthUrl(workspaceId: string, intent: MetaConnectionInt
     auth_type: "rerequest",
     return_scopes: "true"
   });
+  const businessLoginConfigId = process.env.META_BUSINESS_LOGIN_CONFIG_ID || process.env.META_CONFIG_ID;
+  if (businessLoginConfigId) {
+    params.set("config_id", businessLoginConfigId);
+  }
 
   return `https://www.facebook.com/${graphVersion()}/dialog/oauth?${params.toString()}`;
 }
