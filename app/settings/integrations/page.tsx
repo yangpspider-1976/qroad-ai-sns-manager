@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { IntegrationsClient } from "@/components/integrations-client";
+import { hasDatabaseConfig } from "@/lib/db/env";
 import { mapBrandProfile } from "@/lib/db/mappers";
 import {
   instagramLoginConfigStatus,
@@ -19,7 +20,7 @@ export const dynamic = "force-dynamic";
 const selectedWorkspaceCookie = "qroad_selected_workspace_id";
 
 async function getInitialWorkspaces(): Promise<Workspace[]> {
-  if (!process.env.DATABASE_URL) return [];
+  if (!hasDatabaseConfig()) return [];
 
   const { prisma } = await import("@/lib/db/prisma");
   const workspaces = await prisma.workspace.findMany({
@@ -40,7 +41,7 @@ async function getInitialWorkspaces(): Promise<Workspace[]> {
 }
 
 async function getInitialMetaAccounts(workspaceId: string) {
-  if (!process.env.DATABASE_URL) {
+  if (!hasDatabaseConfig()) {
     const status = metaConfigStatus();
     const instagramStatus = instagramLoginConfigStatus();
     return {
@@ -107,7 +108,7 @@ async function getInitialMetaAccounts(workspaceId: string) {
 }
 
 async function getInitialTikTokAccounts(workspaceId: string) {
-  if (!process.env.DATABASE_URL) {
+  if (!hasDatabaseConfig()) {
     const status = tiktokConfigStatus();
     return {
       configured: status.configured,

@@ -1,10 +1,11 @@
+import { hasDatabaseConfig } from "@/lib/db/env";
 import { mapBrandProfile } from "@/lib/db/mappers";
 import { WorkspacesClient } from "./workspaces-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function WorkspacesPage() {
-  if (!process.env.DATABASE_URL) {
+  if (!hasDatabaseConfig()) {
     return <WorkspacesClient initialWorkspaces={[]} />;
   }
 
