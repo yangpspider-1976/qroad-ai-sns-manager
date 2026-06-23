@@ -123,7 +123,9 @@ export function buildMetaOAuthUrl(workspaceId: string, intent: MetaConnectionInt
     redirect_uri: process.env.META_REDIRECT_URI ?? "",
     response_type: "code",
     state: `${workspaceId}:${intent}`,
-    scope: metaFacebookLoginScopesFor(intent).join(",")
+    scope: metaFacebookLoginScopesFor(intent).join(","),
+    auth_type: "rerequest",
+    return_scopes: "true"
   });
 
   return `https://www.facebook.com/${graphVersion()}/dialog/oauth?${params.toString()}`;
