@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { mapPostDraft } from "@/lib/db/mappers";
 import { getDemoUser, prisma } from "@/lib/db/prisma";
-import { publishFacebookMultiPhotoPost, publishFacebookTextPost } from "@/lib/platform/meta/facebook";
+import {
+  facebookEnvPageForPublishing,
+  publishFacebookMultiPhotoPost,
+  publishFacebookTextPost,
+  type FacebookPublishAccount
+} from "@/lib/platform/meta/facebook";
 
 const publishSchema = z.object({
   postDraftId: z.string()
@@ -56,8 +61,22 @@ export async function POST(request: Request) {
       platform: "facebook"
     }
   });
-  if (!account) {
-    return NextResponse.json({ error: "Connect and select a Facebook Page in Integrations before publishing." }, { status: 409 });
+  const publishAccount: FacebookPublishAccount | null = account
+    ? {
+        accountName: account.accountName,
+        externalAccountId: account.externalAccountId,
+        tokenEncrypted: account.tokenEncrypted,
+        source: "database"
+      }
+    : facebookEnvPageForPublishing();
+  if (!publishAccount) {
+    return NextResponse.json(
+      {
+        error:
+          "Connect and select a Facebook Page in Integrations, or set FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN in Vercel."
+      },
+      { status: 409 }
+    );
   }
 
   const draft = mapPostDraft(dbDraft);
@@ -70,14 +89,14 @@ export async function POST(request: Request) {
       imageUrls.length > 0
         ? await publishFacebookMultiPhotoPost({
             postDraft: draft,
-            pageId: account.externalAccountId,
-            pageAccessToken: account.tokenEncrypted,
+            pageId: publishAccount.externalAccountId,
+            pageAccessToken: publishAccount.tokenEncrypted,
             imageUrls
           })
         : await publishFacebookTextPost({
             postDraft: draft,
-            pageId: account.externalAccountId,
-            pageAccessToken: account.tokenEncrypted
+            pageId: publishAccount.externalAccountId,
+            pageAccessToken: publishAccount.tokenEncrypted
           });
 
     const platformPostId = published.post_id ?? published.id;
@@ -93,8 +112,9 @@ export async function POST(request: Request) {
             live: true,
             provider: "meta",
             endpoint: imageUrls.length > 0 ? "/feed (attached_media)" : "/feed",
-            pageId: account.externalAccountId,
-            pageName: account.accountName,
+            pageId: publishAccount.externalAccountId,
+            pageName: publishAccount.accountName,
+            accountSource: publishAccount.source,
             imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
             message: [draft.caption, draft.hashtags.join(" ")].filter(Boolean).join("\n\n")
           },
@@ -112,7 +132,7 @@ export async function POST(request: Request) {
           action: "publish.facebook.success",
           entityType: "PostDraft",
           entityId: draft.id,
-          metadata: { platformPostId, pageId: account.externalAccountId }
+          metadata: { platformPostId, pageId: publishAccount.externalAccountId, accountSource: publishAccount.source }
         }
       })
     ]);
@@ -133,8 +153,9 @@ export async function POST(request: Request) {
             live: true,
             provider: "meta",
             endpoint: "/feed",
-            pageId: account.externalAccountId,
-            pageName: account.accountName
+            pageId: publishAccount.externalAccountId,
+            pageName: publishAccount.accountName,
+            accountSource: publishAccount.source
           },
           errorMessage: message
         }
@@ -150,7 +171,7 @@ export async function POST(request: Request) {
           action: "publish.facebook.failed",
           entityType: "PostDraft",
           entityId: draft.id,
-          metadata: { error: message, pageId: account.externalAccountId }
+          metadata: { error: message, pageId: publishAccount.externalAccountId, accountSource: publishAccount.source }
         }
       })
     ]);

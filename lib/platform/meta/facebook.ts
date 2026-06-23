@@ -23,6 +23,13 @@ type FacebookPublishInput = {
   pageAccessToken: string;
 };
 
+export type FacebookPublishAccount = {
+  accountName: string;
+  externalAccountId: string;
+  tokenEncrypted: string;
+  source: "database" | "environment";
+};
+
 type InstagramPublishInput = {
   postDraft: PostDraft;
   instagramUserId: string;
@@ -54,6 +61,43 @@ const defaultFacebookPageScopes = ["pages_show_list", "pages_read_engagement", "
 const facebookPageScopes = new Set(defaultFacebookPageScopes);
 
 const standaloneInstagramScopes = new Set(["instagram_business_basic", "instagram_business_content_publish"]);
+
+export function facebookPageEnvStatus() {
+  const missing = ["FACEBOOK_PAGE_ID", "FACEBOOK_PAGE_ACCESS_TOKEN"].filter((key) => !process.env[key]);
+  return {
+    configured: missing.length === 0,
+    missing
+  };
+}
+
+export function facebookEnvPageForDisplay() {
+  const status = facebookPageEnvStatus();
+  if (!status.configured) return null;
+
+  return {
+    id: "env-facebook-page",
+    pageId: process.env.FACEBOOK_PAGE_ID ?? "",
+    pageName: process.env.FACEBOOK_PAGE_NAME || "Configured Facebook Page",
+    active: true,
+    tokenExpiresAt: null,
+    scopes: {
+      source: "environment",
+      note: "Configured with FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN."
+    }
+  };
+}
+
+export function facebookEnvPageForPublishing(): FacebookPublishAccount | null {
+  const status = facebookPageEnvStatus();
+  if (!status.configured) return null;
+
+  return {
+    accountName: process.env.FACEBOOK_PAGE_NAME || "Configured Facebook Page",
+    externalAccountId: process.env.FACEBOOK_PAGE_ID ?? "",
+    tokenEncrypted: process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? "",
+    source: "environment"
+  };
+}
 
 function graphVersion() {
   return process.env.META_GRAPH_VERSION || "v20.0";

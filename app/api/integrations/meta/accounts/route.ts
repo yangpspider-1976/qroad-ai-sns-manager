@@ -7,6 +7,7 @@ import {
   instagramLoginScopes
 } from "@/lib/platform/instagram/instagram";
 import {
+  facebookEnvPageForDisplay,
   metaConfigStatus,
   metaFacebookLoginScopesFor,
   metaOAuthScopesFor
@@ -36,6 +37,7 @@ export async function GET(request: Request) {
   const instagramStatus = instagramLoginConfigStatus();
   const facebookAccounts = accounts.filter((account) => account.platform === "facebook" || account.platform === "facebook_page");
   const instagramAccounts = accounts.filter((account) => account.platform === "instagram" || account.platform === "instagram_account");
+  const envFacebookAccount = facebookAccounts.length === 0 ? facebookEnvPageForDisplay() : null;
 
   return NextResponse.json({
     configured: status.configured,
@@ -48,14 +50,17 @@ export async function GET(request: Request) {
     instagramMissing: instagramStatus.missing,
     instagramEnabled: instagramStatus.configured,
     instagramPublishingReady: instagramLoginPublishingReady(),
-    accounts: facebookAccounts.map((account) => ({
-      id: account.id,
-      pageId: account.externalAccountId,
-      pageName: account.accountName,
-      active: account.platform === "facebook",
-      tokenExpiresAt: account.tokenExpiresAt?.toISOString() ?? null,
-      scopes: account.scopes
-    })),
+    accounts: [
+      ...facebookAccounts.map((account) => ({
+        id: account.id,
+        pageId: account.externalAccountId,
+        pageName: account.accountName,
+        active: account.platform === "facebook",
+        tokenExpiresAt: account.tokenExpiresAt?.toISOString() ?? null,
+        scopes: account.scopes
+      })),
+      ...(envFacebookAccount ? [envFacebookAccount] : [])
+    ],
     instagramAccounts: instagramAccounts.map((account) => {
       const scopesObj = (account.scopes as Record<string, unknown>) ?? {};
       return {
