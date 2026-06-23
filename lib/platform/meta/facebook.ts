@@ -68,7 +68,9 @@ function graphUrl(path: string) {
 }
 
 export function metaConfigStatus() {
-  const missing = ["META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI"].filter((key) => !process.env[key]);
+  const missing = ["META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI", "META_BUSINESS_LOGIN_CONFIG_ID"].filter(
+    (key) => !process.env[key]
+  );
   return {
     configured: missing.length === 0,
     missing
@@ -83,7 +85,7 @@ export function metaOAuthScopesFor(intent: MetaConnectionIntent) {
   const raw =
     intent === "instagram"
       ? process.env.META_INSTAGRAM_SCOPES || "pages_show_list,pages_read_engagement,pages_manage_posts"
-      : process.env.META_FACEBOOK_SCOPES || "pages_show_list,pages_read_engagement,pages_manage_posts";
+      : process.env.META_FACEBOOK_SCOPES || process.env.META_SCOPES || "pages_show_list,pages_read_engagement,pages_manage_posts";
   return raw
     .split(",")
     .map((scope) => scope.trim())
