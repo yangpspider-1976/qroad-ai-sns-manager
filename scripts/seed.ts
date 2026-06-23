@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { generateContentBriefVariants } from "../lib/ai/mock-provider";
 import { prisma } from "../lib/db/prisma";
 import { qroadWorkspace, sampleBrief } from "../lib/mock-data";
