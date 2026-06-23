@@ -49,13 +49,9 @@ export type MetaInstagramInspectionResult = {
   status?: number;
 };
 
-const facebookLoginScopes = new Set([
-  "pages_show_list",
-  "pages_read_engagement",
-  "pages_manage_posts",
-  "instagram_basic",
-  "instagram_content_publish"
-]);
+const defaultFacebookPageScopes = ["pages_show_list", "pages_read_engagement", "pages_manage_posts"];
+
+const facebookPageScopes = new Set(defaultFacebookPageScopes);
 
 const standaloneInstagramScopes = new Set(["instagram_business_basic", "instagram_business_content_publish"]);
 
@@ -84,8 +80,8 @@ export function metaOAuthScopes() {
 export function metaOAuthScopesFor(intent: MetaConnectionIntent) {
   const raw =
     intent === "instagram"
-      ? process.env.META_INSTAGRAM_SCOPES || "pages_show_list,pages_read_engagement,pages_manage_posts"
-      : process.env.META_FACEBOOK_SCOPES || process.env.META_SCOPES || "pages_show_list,pages_read_engagement,pages_manage_posts";
+      ? process.env.META_INSTAGRAM_SCOPES || defaultFacebookPageScopes.join(",")
+      : process.env.META_FACEBOOK_SCOPES || defaultFacebookPageScopes.join(",");
   return raw
     .split(",")
     .map((scope) => scope.trim())
@@ -93,8 +89,8 @@ export function metaOAuthScopesFor(intent: MetaConnectionIntent) {
 }
 
 export function metaFacebookLoginScopesFor(intent: MetaConnectionIntent) {
-  const scopes = metaOAuthScopesFor(intent).filter((scope) => facebookLoginScopes.has(scope));
-  return intent === "instagram" && scopes.length === 0 ? metaOAuthScopesFor("facebook") : scopes;
+  const scopes = metaOAuthScopesFor(intent).filter((scope) => facebookPageScopes.has(scope));
+  return scopes.length > 0 ? scopes : defaultFacebookPageScopes;
 }
 
 export function metaStandaloneInstagramScopes() {
