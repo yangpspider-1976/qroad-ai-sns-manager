@@ -1,10 +1,14 @@
 import { mapBrandProfile } from "@/lib/db/mappers";
-import { prisma } from "@/lib/db/prisma";
 import { WorkspacesClient } from "./workspaces-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function WorkspacesPage() {
+  if (!process.env.DATABASE_URL) {
+    return <WorkspacesClient initialWorkspaces={[]} />;
+  }
+
+  const { prisma } = await import("@/lib/db/prisma");
   const records = await prisma.workspace.findMany({
     include: { brandProfile: true, owner: true },
     orderBy: { createdAt: "asc" }

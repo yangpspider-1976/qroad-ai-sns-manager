@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { IntegrationsClient } from "@/components/integrations-client";
 import { mapBrandProfile } from "@/lib/db/mappers";
-import { prisma } from "@/lib/db/prisma";
 import {
   instagramLoginConfigStatus,
   instagramLoginPublishingReady,
@@ -20,6 +19,9 @@ export const dynamic = "force-dynamic";
 const selectedWorkspaceCookie = "qroad_selected_workspace_id";
 
 async function getInitialWorkspaces(): Promise<Workspace[]> {
+  if (!process.env.DATABASE_URL) return [];
+
+  const { prisma } = await import("@/lib/db/prisma");
   const workspaces = await prisma.workspace.findMany({
     include: { brandProfile: true, owner: true },
     orderBy: { createdAt: "asc" }
@@ -38,6 +40,26 @@ async function getInitialWorkspaces(): Promise<Workspace[]> {
 }
 
 async function getInitialMetaAccounts(workspaceId: string) {
+  if (!process.env.DATABASE_URL) {
+    const status = metaConfigStatus();
+    const instagramStatus = instagramLoginConfigStatus();
+    return {
+      configured: status.configured,
+      missing: status.missing,
+      requestedScopes: metaFacebookLoginScopesFor("facebook"),
+      facebookScopes: metaFacebookLoginScopesFor("facebook"),
+      instagramScopes: metaFacebookLoginScopesFor("instagram"),
+      instagramStandaloneScopes: instagramLoginScopes(),
+      instagramConfiguredScopes: metaOAuthScopesFor("instagram"),
+      instagramMissing: instagramStatus.missing,
+      instagramEnabled: instagramStatus.configured,
+      instagramPublishingReady: instagramLoginPublishingReady(),
+      accounts: [],
+      instagramAccounts: []
+    };
+  }
+
+  const { prisma } = await import("@/lib/db/prisma");
   const accounts = await prisma.socialAccount.findMany({
     where: {
       workspaceId,
@@ -85,6 +107,17 @@ async function getInitialMetaAccounts(workspaceId: string) {
 }
 
 async function getInitialTikTokAccounts(workspaceId: string) {
+  if (!process.env.DATABASE_URL) {
+    const status = tiktokConfigStatus();
+    return {
+      configured: status.configured,
+      missing: status.missing,
+      scopes: tiktokOAuthScopes(),
+      accounts: []
+    };
+  }
+
+  const { prisma } = await import("@/lib/db/prisma");
   const accounts = await prisma.socialAccount.findMany({
     where: { workspaceId, platform: { in: ["tiktok", "tiktok_account"] } },
     orderBy: { createdAt: "asc" }
