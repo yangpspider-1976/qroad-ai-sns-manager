@@ -16,6 +16,21 @@ function parseMetaState(state: string | null) {
   };
 }
 
+function buildNoPagesMessage(url: URL) {
+  const grantedScopes = url.searchParams.get("granted_scopes");
+  const deniedScopes = url.searchParams.get("denied_scopes");
+  const details = [
+    grantedScopes ? `Granted scopes: ${grantedScopes}.` : null,
+    deniedScopes ? `Denied scopes: ${deniedScopes}.` : null
+  ].filter(Boolean);
+
+  return [
+    "No managed Facebook Pages were returned for this account.",
+    ...details,
+    "Confirm the Facebook Login for Business configuration includes the QROAD Philippines Page asset and the pages_show_list, pages_read_engagement, and pages_manage_posts permissions."
+  ].join(" ");
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
@@ -47,7 +62,7 @@ export async function GET(request: Request) {
     const pages = await fetchManagedFacebookPages(token.accessToken, { includeInstagram: intent === "instagram" });
     if (pages.length === 0) {
       return NextResponse.redirect(
-        new URL("/settings/integrations?meta=error&message=No managed Facebook Pages were returned for this account.", request.url)
+        new URL(`/settings/integrations?meta=error&message=${encodeURIComponent(buildNoPagesMessage(url))}`, request.url)
       );
     }
 
