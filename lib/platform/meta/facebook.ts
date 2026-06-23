@@ -265,7 +265,7 @@ export async function publishFacebookMultiPhotoPost({
   pageAccessToken,
   imageUrls
 }: FacebookPublishInput & { imageUrls: string[] }) {
-  // Upload each photo as unpublished to get photo IDs
+  // Upload photo assets as unpublished, then create a feed story that attaches them.
   const photoIds = await Promise.all(
     imageUrls.map(async (url) => {
       const res = await fetch(graphUrl(`/${pageId}/photos`), {

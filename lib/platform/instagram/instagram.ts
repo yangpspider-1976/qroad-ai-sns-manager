@@ -26,6 +26,13 @@ type InstagramPublishInput = {
   imageUrls: string[];
 };
 
+type InstagramPublishResult = {
+  id: string;
+  creationId: string;
+  mediaType: "IMAGE" | "CAROUSEL";
+  usedImageUrls: string[];
+};
+
 function instagramAppId() {
   return process.env.INSTAGRAM_APP_ID || process.env.META_INSTAGRAM_APP_ID || "";
 }
@@ -170,14 +177,19 @@ export async function publishInstagramBusinessImagePost({
   instagramUserId,
   accessToken,
   imageUrls
-}: InstagramPublishInput) {
+}: InstagramPublishInput): Promise<InstagramPublishResult> {
   const caption = [postDraft.caption, postDraft.hashtags.join(" ")].filter(Boolean).join("\n\n");
+  const firstImageUrl = imageUrls[0];
+
+  if (!firstImageUrl) {
+    throw new Error("Instagram publishing requires at least one image.");
+  }
 
   if (imageUrls.length === 1) {
     const createRes = await fetch(graphInstagramUrl(`/${instagramUserId}/media`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ access_token: accessToken, image_url: imageUrls[0], caption })
+      body: JSON.stringify({ access_token: accessToken, image_url: firstImageUrl, media_type: "IMAGE", caption })
     });
     const createBody = await createRes.json();
     if (!createRes.ok || !createBody.id) throw new Error(createBody.error?.message ?? "Instagram media container creation failed.");
@@ -191,16 +203,20 @@ export async function publishInstagramBusinessImagePost({
     });
     const publishBody = await publishRes.json();
     if (!publishRes.ok || !publishBody.id) throw new Error(publishBody.error?.message ?? "Instagram publishing failed.");
-    return { id: publishBody.id as string, creationId: containerId };
+    return { id: publishBody.id as string, creationId: containerId, mediaType: "IMAGE", usedImageUrls: [firstImageUrl] };
   }
 
-  // Carousel post for multiple images
   const itemIds = await Promise.all(
     imageUrls.map(async (url) => {
       const res = await fetch(graphInstagramUrl(`/${instagramUserId}/media`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_token: accessToken, image_url: url, is_carousel_item: true })
+        body: JSON.stringify({
+          access_token: accessToken,
+          image_url: url,
+          media_type: "IMAGE",
+          is_carousel_item: true
+        })
       });
       const body = await res.json();
       if (!res.ok || !body.id) throw new Error(body.error?.message ?? "Instagram carousel item creation failed.");
@@ -208,10 +224,17 @@ export async function publishInstagramBusinessImagePost({
     })
   );
 
+  await Promise.all(itemIds.map((itemId) => pollContainerReady(itemId, accessToken)));
+
   const carouselRes = await fetch(graphInstagramUrl(`/${instagramUserId}/media`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ access_token: accessToken, media_type: "CAROUSEL", children: itemIds.join(","), caption })
+    body: JSON.stringify({
+      access_token: accessToken,
+      media_type: "CAROUSEL",
+      children: itemIds.join(","),
+      caption
+    })
   });
   const carouselBody = await carouselRes.json();
   if (!carouselRes.ok || !carouselBody.id) throw new Error(carouselBody.error?.message ?? "Instagram carousel container creation failed.");
@@ -225,5 +248,5 @@ export async function publishInstagramBusinessImagePost({
   });
   const publishBody = await publishRes.json();
   if (!publishRes.ok || !publishBody.id) throw new Error(publishBody.error?.message ?? "Instagram carousel publishing failed.");
-  return { id: publishBody.id as string, creationId: carouselId };
+  return { id: publishBody.id as string, creationId: carouselId, mediaType: "CAROUSEL", usedImageUrls: imageUrls };
 }

@@ -23,6 +23,10 @@ function absolutePublicUrl(pathOrUrl: string, requestUrl: string) {
   return url.toString();
 }
 
+function isInstagramSupportedImage(url: string) {
+  return /\.(jpe?g|png|webp)(?:\?|$)/i.test(url);
+}
+
 export async function POST(request: Request) {
   const parsed = publishSchema.safeParse(await request.json());
   if (!parsed.success) {
@@ -76,15 +80,17 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!dbDraft.mediaAssets.length) {
+  const publishableAssets = dbDraft.mediaAssets.filter((asset) => isInstagramSupportedImage(asset.url));
+  if (!publishableAssets.length) {
     return NextResponse.json({ error: "Upload an image before publishing to Instagram." }, { status: 409 });
   }
 
   const draft = mapPostDraft(dbDraft);
   const user = await getDemoUser();
+  let imageUrls: string[] = [];
 
   try {
-    const imageUrls = dbDraft.mediaAssets.map((a) => absolutePublicUrl(a.url, request.url));
+    imageUrls = publishableAssets.map((a) => absolutePublicUrl(a.url, request.url));
     const published = await publishInstagramBusinessImagePost({
       postDraft: draft,
       instagramUserId: account.externalAccountId,
@@ -105,7 +111,9 @@ export async function POST(request: Request) {
             endpoint: "/media_publish",
             instagramUserId: account.externalAccountId,
             accountName: account.accountName,
-            imageUrls
+            imageUrls,
+            mediaType: published.mediaType,
+            usedImageUrls: published.usedImageUrls
           },
           responsePayload: published
         }
@@ -121,7 +129,7 @@ export async function POST(request: Request) {
           action: "publish.instagram.success",
           entityType: "PostDraft",
           entityId: draft.id,
-          metadata: { platformPostId: published.id, instagramUserId: account.externalAccountId }
+          metadata: { platformPostId: published.id, instagramUserId: account.externalAccountId, mediaType: published.mediaType }
         }
       })
     ]);
@@ -143,14 +151,11 @@ export async function POST(request: Request) {
             provider: "meta",
             endpoint: "/media_publish",
             instagramUserId: account.externalAccountId,
-            accountName: account.accountName
+            accountName: account.accountName,
+            imageUrls
           },
           errorMessage: message
         }
-      }),
-      prisma.postDraft.update({
-        where: { id: draft.id },
-        data: { status: "failed" }
       }),
       prisma.auditLog.create({
         data: {

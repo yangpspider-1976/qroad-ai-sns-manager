@@ -15,6 +15,8 @@ import {
 import { tiktokConfigStatus, tiktokOAuthScopes } from "@/lib/platform/tiktok/tiktok";
 import type { Workspace } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
 const selectedWorkspaceCookie = "qroad_selected_workspace_id";
 
 async function getInitialWorkspaces(): Promise<Workspace[]> {

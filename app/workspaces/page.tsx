@@ -2,6 +2,8 @@ import { mapBrandProfile } from "@/lib/db/mappers";
 import { prisma } from "@/lib/db/prisma";
 import { WorkspacesClient } from "./workspaces-client";
 
+export const dynamic = "force-dynamic";
+
 export default async function WorkspacesPage() {
   const records = await prisma.workspace.findMany({
     include: { brandProfile: true, owner: true },

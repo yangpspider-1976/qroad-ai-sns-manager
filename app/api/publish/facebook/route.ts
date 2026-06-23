@@ -2,11 +2,16 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { mapPostDraft } from "@/lib/db/mappers";
 import { getDemoUser, prisma } from "@/lib/db/prisma";
-import { publishFacebookMultiPhotoPost, publishFacebookPhotoPost, publishFacebookTextPost } from "@/lib/platform/meta/facebook";
+import { publishFacebookMultiPhotoPost, publishFacebookTextPost } from "@/lib/platform/meta/facebook";
 
 const publishSchema = z.object({
   postDraftId: z.string()
 });
+
+type FacebookPublishResult = {
+  id: string;
+  post_id?: string;
+};
 
 function absolutePublicUrl(pathOrUrl: string, requestUrl: string) {
   const appUrl = process.env.APP_URL || new URL(requestUrl).origin;
@@ -61,26 +66,19 @@ export async function POST(request: Request) {
   const imageUrls = assets.map((a) => absolutePublicUrl(a.url, request.url)).filter((u): u is string => u !== null);
 
   try {
-    const published =
-      imageUrls.length > 1
+    const published: FacebookPublishResult =
+      imageUrls.length > 0
         ? await publishFacebookMultiPhotoPost({
             postDraft: draft,
             pageId: account.externalAccountId,
             pageAccessToken: account.tokenEncrypted,
             imageUrls
           })
-        : imageUrls.length === 1
-          ? await publishFacebookPhotoPost({
-              postDraft: draft,
-              pageId: account.externalAccountId,
-              pageAccessToken: account.tokenEncrypted,
-              imageUrl: imageUrls[0]
-            })
-          : await publishFacebookTextPost({
-              postDraft: draft,
-              pageId: account.externalAccountId,
-              pageAccessToken: account.tokenEncrypted
-            });
+        : await publishFacebookTextPost({
+            postDraft: draft,
+            pageId: account.externalAccountId,
+            pageAccessToken: account.tokenEncrypted
+          });
 
     const platformPostId = published.post_id ?? published.id;
 
@@ -94,7 +92,7 @@ export async function POST(request: Request) {
           requestPayload: {
             live: true,
             provider: "meta",
-            endpoint: imageUrls.length > 0 ? (imageUrls.length > 1 ? "/feed (multi-photo)" : "/photos") : "/feed",
+            endpoint: imageUrls.length > 0 ? "/feed (attached_media)" : "/feed",
             pageId: account.externalAccountId,
             pageName: account.accountName,
             imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
