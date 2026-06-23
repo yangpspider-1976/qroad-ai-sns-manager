@@ -1,8 +1,6 @@
-import { PrismaClient } from "@prisma/client";
 import { generateContentBriefVariants } from "../lib/ai/mock-provider";
+import { prisma } from "../lib/db/prisma";
 import { qroadWorkspace, sampleBrief } from "../lib/mock-data";
-
-const prisma = new PrismaClient();
 
 async function main() {
   const user = await prisma.user.upsert({

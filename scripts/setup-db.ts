@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { createClient } from "@libsql/client";
 
 // Node 24 provides node:sqlite, but @types/node currently lags the runtime API.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -11,11 +12,8 @@ const { DatabaseSync } = require("node:sqlite") as {
 };
 
 const dbPath = join(process.cwd(), "prisma", "dev.db");
-mkdirSync(dirname(dbPath), { recursive: true });
 
-const db = new DatabaseSync(dbPath);
-
-db.exec(`
+const schemaSql = `
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS User (
@@ -186,7 +184,31 @@ CREATE TABLE IF NOT EXISTS AuditLog (
   CONSTRAINT AuditLog_userId_fkey FOREIGN KEY (userId) REFERENCES User (id),
   CONSTRAINT AuditLog_workspaceId_fkey FOREIGN KEY (workspaceId) REFERENCES Workspace (id) ON DELETE CASCADE
 );
-`);
+`;
 
-db.close();
-console.log(`Created local SQLite database at ${dbPath}`);
+async function main() {
+  const tursoUrl = process.env.TURSO_DATABASE_URL;
+
+  if (tursoUrl) {
+    const client = createClient({
+      url: tursoUrl,
+      authToken: process.env.TURSO_AUTH_TOKEN
+    });
+
+    await client.executeMultiple(schemaSql);
+    client.close();
+    console.log(`Created Turso/libSQL database schema at ${tursoUrl}`);
+    return;
+  }
+
+  mkdirSync(dirname(dbPath), { recursive: true });
+  const db = new DatabaseSync(dbPath);
+  db.exec(schemaSql);
+  db.close();
+  console.log(`Created local SQLite database at ${dbPath}`);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

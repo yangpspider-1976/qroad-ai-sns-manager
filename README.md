@@ -8,7 +8,7 @@ The app is built around a safe workflow: AI drafts content, humans review and ap
 
 - Next.js, React, TypeScript
 - Tailwind CSS v4 design tokens copied from the provided operational dashboard standard
-- Prisma schema for PostgreSQL
+- Prisma with SQLite locally and Turso/libSQL for hosted deployments
 - Zod validation
 - Vitest tests
 - Mock AI and mock publisher adapters
@@ -25,7 +25,7 @@ Open `http://localhost:3000`.
 
 ## Database
 
-Local development uses SQLite at `prisma/dev.db` because it can run without installing PostgreSQL on the workstation. The Prisma schema is still the data model source and can be moved back to PostgreSQL/Supabase by changing the datasource and migration strategy later.
+Local development uses SQLite at `prisma/dev.db` because it can run without installing a database server on the workstation. Hosted deployments can use Turso/libSQL through Prisma's libSQL adapter.
 
 ```bash
 npm run prisma:generate
@@ -35,7 +35,21 @@ npm run seed
 
 The app now persists workspaces, brand profiles, content briefs, post drafts, approvals, publish jobs, publish logs, media assets, metrics, and audit logs in the local database.
 
-Note: `prisma migrate dev` currently fails in this Windows/Node 24 environment with a Prisma schema-engine error even though `prisma validate` passes. `npm run db:setup` applies the equivalent local SQLite schema from `scripts/setup-db.ts`.
+For Turso, create a database in the Turso dashboard, then set these environment variables locally and in Vercel:
+
+```bash
+TURSO_DATABASE_URL=libsql://your-database.turso.io
+TURSO_AUTH_TOKEN=your-token
+```
+
+After the variables are available, initialize and seed the hosted database:
+
+```bash
+npm run db:setup
+npm run seed
+```
+
+Note: `prisma migrate dev` currently fails in this Windows/Node 24 environment with a Prisma schema-engine error even though `prisma validate` passes. `npm run db:setup` applies the equivalent schema from `scripts/setup-db.ts` to either local SQLite or Turso, depending on the environment variables.
 
 ## Useful Commands
 
