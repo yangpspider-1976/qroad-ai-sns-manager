@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { mapPostDraft } from "@/lib/db/mappers";
 import { getDemoUser, prisma } from "@/lib/db/prisma";
+import { publicOrigin } from "@/lib/http/public-url";
 import {
   instagramLoginPublishingReady,
   publishInstagramBusinessImagePost
@@ -11,9 +12,8 @@ const publishSchema = z.object({
   postDraftId: z.string()
 });
 
-function absolutePublicUrl(pathOrUrl: string, requestUrl: string) {
-  const appUrl = process.env.APP_URL || new URL(requestUrl).origin;
-  const url = new URL(pathOrUrl, appUrl);
+function absolutePublicUrl(pathOrUrl: string, request: Request) {
+  const url = new URL(pathOrUrl, publicOrigin(request));
   if (url.protocol !== "https:") {
     throw new Error("Instagram publishing requires a public HTTPS image URL. Localhost uploads can be reviewed but cannot be posted by Meta.");
   }
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
   let imageUrls: string[] = [];
 
   try {
-    imageUrls = publishableAssets.map((a) => absolutePublicUrl(a.url, request.url));
+    imageUrls = publishableAssets.map((a) => absolutePublicUrl(a.url, request));
     const published = await publishInstagramBusinessImagePost({
       postDraft: draft,
       instagramUserId: account.externalAccountId,

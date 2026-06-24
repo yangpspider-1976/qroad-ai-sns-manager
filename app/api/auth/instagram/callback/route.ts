@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDemoUser, prisma } from "@/lib/db/prisma";
+import { publicUrl } from "@/lib/http/public-url";
 import {
   exchangeInstagramLoginCode,
   exchangeInstagramLongLivedToken,
@@ -18,25 +19,19 @@ export async function GET(request: Request) {
 
   if (errorParam) {
     return NextResponse.redirect(
-      new URL(
-        `/settings/integrations?instagram=error&message=${encodeURIComponent(errorDescription ?? errorParam)}`,
-        request.url
-      )
+      publicUrl(`/settings/integrations?instagram=error&message=${encodeURIComponent(errorDescription ?? errorParam)}`, request)
     );
   }
   if (!code || !workspaceId) {
     return NextResponse.redirect(
-      new URL("/settings/integrations?instagram=error&message=Missing OAuth code or workspace state.", request.url)
+      publicUrl("/settings/integrations?instagram=error&message=Missing OAuth code or workspace state.", request)
     );
   }
 
   const status = instagramLoginConfigStatus();
   if (!status.configured) {
     return NextResponse.redirect(
-      new URL(
-        `/settings/integrations?instagram=error&message=${encodeURIComponent(`Missing ${status.missing.join(", ")}`)}`,
-        request.url
-      )
+      publicUrl(`/settings/integrations?instagram=error&message=${encodeURIComponent(`Missing ${status.missing.join(", ")}`)}`, request)
     );
   }
 
@@ -44,9 +39,7 @@ export async function GET(request: Request) {
     const user = await getDemoUser();
     const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
     if (!workspace) {
-      return NextResponse.redirect(
-        new URL("/settings/integrations?instagram=error&message=Workspace not found.", request.url)
-      );
+      return NextResponse.redirect(publicUrl("/settings/integrations?instagram=error&message=Workspace not found.", request));
     }
 
     const shortToken = await exchangeInstagramLoginCode(code);
@@ -107,18 +100,11 @@ export async function GET(request: Request) {
       }
     });
 
-    const appUrl = process.env.APP_URL ?? "http://localhost:3000";
     return NextResponse.redirect(
-      new URL(
-        `/settings/integrations?instagram=connected&username=${encodeURIComponent(profile.username ?? "")}`,
-        appUrl
-      )
+      publicUrl(`/settings/integrations?instagram=connected&username=${encodeURIComponent(profile.username ?? "")}`, request)
     );
   } catch (error) {
-    const appUrl = process.env.APP_URL ?? "http://localhost:3000";
     const message = error instanceof Error ? error.message : "Instagram Login connection failed.";
-    return NextResponse.redirect(
-      new URL(`/settings/integrations?instagram=error&message=${encodeURIComponent(message)}`, appUrl)
-    );
+    return NextResponse.redirect(publicUrl(`/settings/integrations?instagram=error&message=${encodeURIComponent(message)}`, request));
   }
 }
