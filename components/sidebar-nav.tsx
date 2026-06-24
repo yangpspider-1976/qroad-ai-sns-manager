@@ -56,9 +56,13 @@ export function SidebarNav({
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-[264px] overflow-y-auto border-r border-[#e3e3e5] bg-white px-4 py-5 max-[920px]:static max-[920px]:h-auto max-[920px]:w-auto">
-      <div className="mb-5 grid min-h-[42px] content-center gap-0.5">
-        <strong className="text-base font-bold">QROAD AI SNS</strong>
-        <span className="text-xs text-muted">Operations Manager</span>
+      <div className="mb-5 flex min-h-[42px] items-center gap-2.5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.png" alt="QROAD" width={36} height={36} className="shrink-0 rounded" />
+        <div className="grid content-center gap-0.5">
+          <strong className="text-base font-bold">QROAD AI SNS</strong>
+          <span className="text-xs text-muted">Operations Manager</span>
+        </div>
       </div>
       <WorkspaceSwitcher initialSelectedId={initialSelectedWorkspaceId} initialWorkspaces={initialWorkspaces} />
       <nav className="grid gap-3 max-[920px]:gap-3.5" aria-label="Main navigation">

@@ -10,7 +10,12 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "QROAD AI SNS Manager",
-  description: "Internal AI-assisted social media operations dashboard"
+  description: "Internal AI-assisted social media operations dashboard",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png"
+  }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
