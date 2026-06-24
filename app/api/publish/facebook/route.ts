@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { mapPostDraft } from "@/lib/db/mappers";
 import { getDemoUser, prisma } from "@/lib/db/prisma";
+import { publicOrigin } from "@/lib/http/public-url";
 import {
   facebookEnvPageForPublishing,
   publishFacebookMultiPhotoPost,
@@ -18,9 +19,8 @@ type FacebookPublishResult = {
   post_id?: string;
 };
 
-function absolutePublicUrl(pathOrUrl: string, requestUrl: string) {
-  const appUrl = process.env.APP_URL || new URL(requestUrl).origin;
-  const url = new URL(pathOrUrl, appUrl);
+function absolutePublicUrl(pathOrUrl: string, request: Request) {
+  const url = new URL(pathOrUrl, publicOrigin(request));
   if (url.protocol !== "https:" || ["localhost", "127.0.0.1"].includes(url.hostname)) {
     return null;
   }
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
   const draft = mapPostDraft(dbDraft);
   const user = await getDemoUser();
   const assets = dbDraft.mediaAssets;
-  const imageUrls = assets.map((a) => absolutePublicUrl(a.url, request.url)).filter((u): u is string => u !== null);
+  const imageUrls = assets.map((a) => absolutePublicUrl(a.url, request)).filter((u): u is string => u !== null);
 
   try {
     const published: FacebookPublishResult =

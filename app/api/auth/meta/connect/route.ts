@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicUrl } from "@/lib/http/public-url";
 import type { MetaConnectionIntent } from "@/lib/platform/meta/facebook";
 import { buildMetaOAuthUrl } from "@/lib/platform/meta/facebook";
 
@@ -13,6 +14,9 @@ export async function GET(request: Request) {
   try {
     return NextResponse.redirect(buildMetaOAuthUrl(workspaceId, intent as MetaConnectionIntent));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Meta OAuth is not configured." }, { status: 500 });
+    // The user navigates here directly, so surface config errors in the UI
+    // instead of returning raw JSON they can't read.
+    const message = error instanceof Error ? error.message : "Meta OAuth is not configured.";
+    return NextResponse.redirect(publicUrl(`/settings/integrations?meta=error&message=${encodeURIComponent(message)}`, request));
   }
 }

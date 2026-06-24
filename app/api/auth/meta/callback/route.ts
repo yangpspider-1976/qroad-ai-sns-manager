@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { getDemoUser, prisma } from "@/lib/db/prisma";
+import { publicUrl } from "@/lib/http/public-url";
 import {
   exchangeCodeForLongLivedToken,
   fetchManagedFacebookPages,
+  fetchMetaUserIdentity,
   metaConfigStatus,
-  metaOAuthScopesFor
+  metaOAuthScopesFor,
+  metaUsesBusinessLogin
 } from "@/lib/platform/meta/facebook";
 
 function parseMetaState(state: string | null) {
@@ -16,19 +19,20 @@ function parseMetaState(state: string | null) {
   };
 }
 
-function buildNoPagesMessage(url: URL) {
+function buildNoPagesMessage(url: URL, identity: { id: string; name: string } | null) {
   const grantedScopes = url.searchParams.get("granted_scopes");
   const deniedScopes = url.searchParams.get("denied_scopes");
   const details = [
+    identity ? `Signed in as ${identity.name || identity.id}.` : null,
     grantedScopes ? `Granted scopes: ${grantedScopes}.` : null,
     deniedScopes ? `Denied scopes: ${deniedScopes}.` : null
   ].filter(Boolean);
 
-  return [
-    "No managed Facebook Pages were returned for this account.",
-    ...details,
-    "Confirm the Facebook Login for Business configuration includes the QROAD Philippines Page asset and the pages_show_list, pages_read_engagement, and pages_manage_posts permissions."
-  ].join(" ");
+  const guidance = metaUsesBusinessLogin()
+    ? "In the Facebook dialog, pick the business portfolio and explicitly select the QROAD Philippines Page, and confirm the Login for Business configuration lists that Page as an asset with pages_show_list, pages_read_engagement, and pages_manage_posts."
+    : "Sign in with a Facebook account that has an admin/editor role on the QROAD Philippines Page, and select that Page when the dialog asks which Pages to share. If the Meta app is still in Development mode, that account must also have a role (admin/developer/tester) on the app.";
+
+  return ["No managed Facebook Pages were returned for this account.", ...details, guidance].join(" ");
 }
 
 export async function GET(request: Request) {
@@ -38,16 +42,16 @@ export async function GET(request: Request) {
   const errorMessage = url.searchParams.get("error_message");
 
   if (errorMessage) {
-    return NextResponse.redirect(new URL(`/settings/integrations?meta=error&message=${encodeURIComponent(errorMessage)}`, request.url));
+    return NextResponse.redirect(publicUrl(`/settings/integrations?meta=error&message=${encodeURIComponent(errorMessage)}`, request));
   }
   if (!code || !workspaceId) {
-    return NextResponse.redirect(new URL("/settings/integrations?meta=error&message=Missing OAuth code or workspace state.", request.url));
+    return NextResponse.redirect(publicUrl("/settings/integrations?meta=error&message=Missing OAuth code or workspace state.", request));
   }
 
   const status = metaConfigStatus();
   if (!status.configured) {
     return NextResponse.redirect(
-      new URL(`/settings/integrations?meta=error&message=${encodeURIComponent(`Missing ${status.missing.join(", ")}`)}`, request.url)
+      publicUrl(`/settings/integrations?meta=error&message=${encodeURIComponent(`Missing ${status.missing.join(", ")}`)}`, request)
     );
   }
 
@@ -55,14 +59,15 @@ export async function GET(request: Request) {
     const user = await getDemoUser();
     const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
     if (!workspace) {
-      return NextResponse.redirect(new URL("/settings/integrations?meta=error&message=Workspace not found.", request.url));
+      return NextResponse.redirect(publicUrl("/settings/integrations?meta=error&message=Workspace not found.", request));
     }
 
     const token = await exchangeCodeForLongLivedToken(code);
     const pages = await fetchManagedFacebookPages(token.accessToken, { includeInstagram: intent === "instagram" });
     if (pages.length === 0) {
+      const identity = await fetchMetaUserIdentity(token.accessToken);
       return NextResponse.redirect(
-        new URL(`/settings/integrations?meta=error&message=${encodeURIComponent(buildNoPagesMessage(url))}`, request.url)
+        publicUrl(`/settings/integrations?meta=error&message=${encodeURIComponent(buildNoPagesMessage(url, identity))}`, request)
       );
     }
 
@@ -148,9 +153,9 @@ export async function GET(request: Request) {
 
     if (intent === "instagram" && instagramCount === 0) {
       return NextResponse.redirect(
-        new URL(
+        publicUrl(
           "/settings/integrations?meta=error&message=No Instagram professional account was found on the selected Facebook Pages.",
-          request.url
+          request
         )
       );
     }
@@ -167,10 +172,10 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.redirect(
-      new URL(`/settings/integrations?meta=connected&intent=${intent}&pages=${pages.length}&ig=${instagramCount}`, request.url)
+      publicUrl(`/settings/integrations?meta=connected&intent=${intent}&pages=${pages.length}&ig=${instagramCount}`, request)
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Meta connection failed.";
-    return NextResponse.redirect(new URL(`/settings/integrations?meta=error&message=${encodeURIComponent(message)}`, request.url));
+    return NextResponse.redirect(publicUrl(`/settings/integrations?meta=error&message=${encodeURIComponent(message)}`, request));
   }
 }

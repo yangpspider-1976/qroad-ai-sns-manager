@@ -108,9 +108,11 @@ function graphUrl(path: string) {
 }
 
 export function metaConfigStatus() {
-  const missing = ["META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI", "META_BUSINESS_LOGIN_CONFIG_ID"].filter(
-    (key) => !process.env[key]
-  );
+  // META_BUSINESS_LOGIN_CONFIG_ID is optional: when present we use Facebook
+  // Login for Business, otherwise we fall back to classic scope-based login.
+  // Requiring it here would disable the Connect button even though
+  // buildMetaOAuthUrl() works fine without it.
+  const missing = ["META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI"].filter((key) => !process.env[key]);
   return {
     configured: missing.length === 0,
     missing
@@ -164,14 +166,20 @@ export function buildMetaOAuthUrl(workspaceId: string, intent: MetaConnectionInt
     client_id: process.env.META_APP_ID ?? "",
     redirect_uri: process.env.META_REDIRECT_URI ?? "",
     response_type: "code",
-    state: `${workspaceId}:${intent}`,
-    scope: metaFacebookLoginScopesFor(intent).join(","),
-    auth_type: "rerequest",
-    return_scopes: "true"
+    state: `${workspaceId}:${intent}`
   });
+
   const businessLoginConfigId = process.env.META_BUSINESS_LOGIN_CONFIG_ID || process.env.META_CONFIG_ID;
   if (businessLoginConfigId) {
+    // Facebook Login for Business: permissions are defined by the configuration.
+    // Passing `scope` alongside `config_id` is rejected/ignored by Meta, so we
+    // send only the config id here.
     params.set("config_id", businessLoginConfigId);
+  } else {
+    // Classic Facebook Login: request the Page scopes directly.
+    params.set("scope", metaFacebookLoginScopesFor(intent).join(","));
+    params.set("auth_type", "rerequest");
+    params.set("return_scopes", "true");
   }
 
   return `https://www.facebook.com/${graphVersion()}/dialog/oauth?${params.toString()}`;
@@ -210,6 +218,23 @@ export async function exchangeCodeForLongLivedToken(code: string) {
     accessToken: longToken.access_token as string,
     expiresIn: typeof longToken.expires_in === "number" ? longToken.expires_in : null
   };
+}
+
+export function metaUsesBusinessLogin() {
+  return Boolean(process.env.META_BUSINESS_LOGIN_CONFIG_ID || process.env.META_CONFIG_ID);
+}
+
+/**
+ * Look up which Facebook account a user access token belongs to. Used to
+ * explain "no Pages returned" failures (the #1 cause is signing in with a
+ * personal account that has no admin role on the target Page).
+ */
+export async function fetchMetaUserIdentity(userAccessToken: string): Promise<{ id: string; name: string } | null> {
+  const params = new URLSearchParams({ fields: "id,name", access_token: userAccessToken });
+  const response = await fetch(graphUrl(`/me?${params.toString()}`), { cache: "no-store" });
+  const body = await response.json();
+  if (!response.ok || !body.id) return null;
+  return { id: body.id as string, name: typeof body.name === "string" ? body.name : "" };
 }
 
 export async function fetchManagedFacebookPages(userAccessToken: string, options: { includeInstagram?: boolean } = {}) {
