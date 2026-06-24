@@ -3,20 +3,20 @@ import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { mapPostDraft } from "@/lib/db/mappers";
 import { getDemoUser, prisma } from "@/lib/db/prisma";
+import { publicOrigin } from "@/lib/http/public-url";
 import { fetchTikTokCreatorInfo, uploadTikTokPhotoPost } from "@/lib/platform/tiktok/tiktok";
 
 const publishSchema = z.object({
   postDraftId: z.string()
 });
 
-function absolutePublicUrl(pathOrUrl: string, requestUrl: string) {
-  const appUrl = process.env.APP_URL || new URL(requestUrl).origin;
-  const url = new URL(pathOrUrl, appUrl);
+function absolutePublicUrl(pathOrUrl: string, request: Request) {
+  const url = new URL(pathOrUrl, publicOrigin(request));
   if (url.protocol !== "https:") {
-    throw new Error("TikTok image upload requires a public HTTPS image URL. Set APP_URL to your ngrok HTTPS URL while testing.");
+    throw new Error("TikTok image upload requires a public HTTPS image URL. Set APP_URL/Blob hosting so images resolve to https.");
   }
   if (["localhost", "127.0.0.1"].includes(url.hostname)) {
-    throw new Error("TikTok cannot pull localhost images. Set APP_URL to a public HTTPS URL and upload the image again if needed.");
+    throw new Error("TikTok cannot pull localhost images. Deploy so images are served from a public HTTPS URL.");
   }
   return url.toString();
 }
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
   let imageUrl: string;
 
   try {
-    imageUrl = absolutePublicUrl(asset.url, request.url);
+    imageUrl = absolutePublicUrl(asset.url, request);
   } catch (error) {
     const message = error instanceof Error ? error.message : "TikTok image URL validation failed.";
     return NextResponse.json({ error: message }, { status: 409 });

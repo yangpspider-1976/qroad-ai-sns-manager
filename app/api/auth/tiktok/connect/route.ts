@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicUrl } from "@/lib/http/public-url";
 import { buildTikTokOAuthUrl } from "@/lib/platform/tiktok/tiktok";
 
 export async function GET(request: Request) {
@@ -11,9 +12,8 @@ export async function GET(request: Request) {
   try {
     return NextResponse.redirect(buildTikTokOAuthUrl(workspaceId));
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "TikTok OAuth is not configured." },
-      { status: 500 }
-    );
+    // The user navigates here directly, so surface config errors in the UI.
+    const message = error instanceof Error ? error.message : "TikTok OAuth is not configured.";
+    return NextResponse.redirect(publicUrl(`/settings/integrations?tiktok=error&message=${encodeURIComponent(message)}`, request));
   }
 }
