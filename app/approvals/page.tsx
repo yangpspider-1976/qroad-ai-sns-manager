@@ -25,6 +25,19 @@ function statusListLabel(statuses: PostStatus[]) {
   return statuses.map((status) => status.replaceAll("_", " ")).join(", ");
 }
 
+const TIKTOK_PRIVACY_LABELS: Record<string, string> = {
+  PUBLIC_TO_EVERYONE: "Public — everyone",
+  MUTUAL_FOLLOW_FRIENDS: "Friends — mutual follows",
+  FOLLOWER_OF_CREATOR: "Followers",
+  SELF_ONLY: "Only me (private)"
+};
+
+type TikTokCreator = {
+  creatorNickname?: string | null;
+  creatorUsername?: string | null;
+  privacyLevelOptions: string[];
+};
+
 export default function ApprovalsPage() {
   const selectedWorkspaceId = useSelectedWorkspaceId();
   const [drafts, setDrafts] = useState<PostDraft[]>([]);
@@ -35,11 +48,15 @@ export default function ApprovalsPage() {
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
   const [selectedGroupHasImage, setSelectedGroupHasImage] = useState(false);
+  const [tiktokCreator, setTiktokCreator] = useState<TikTokCreator | null>(null);
+  const [tiktokPrivacy, setTiktokPrivacy] = useState("");
+  const [tiktokCreatorError, setTiktokCreatorError] = useState("");
   const draftGroups = groupDraftsByBrief(drafts);
   const selectedGroup = draftGroups.find((group) => group.id === selectedGroupId);
   const selectedDraft = selectedGroup?.drafts[0];
   const selectedGroupApproved = selectedGroup?.drafts.every((draft) => draft.status === "approved" || draft.status === "scheduled") ?? false;
   const selectedGroupRequiresImage = selectedGroup?.drafts.some((draft) => ["instagram", "tiktok"].includes(draft.platform)) ?? false;
+  const selectedGroupHasTikTok = selectedGroup?.drafts.some((draft) => draft.platform === "tiktok") ?? false;
   const publishBlocked = selectedGroupRequiresImage && !selectedGroupHasImage;
 
   useEffect(() => {
@@ -55,6 +72,30 @@ export default function ApprovalsPage() {
     }
     void loadAssets();
   }, [selectedGroupId, selectedWorkspaceId]);
+
+  useEffect(() => {
+    async function loadTikTokCreator() {
+      if (!selectedGroupHasTikTok || !selectedWorkspaceId) {
+        setTiktokCreator(null);
+        setTiktokCreatorError("");
+        return;
+      }
+      const response = await fetch(`/api/integrations/tiktok/creator-info?workspaceId=${selectedWorkspaceId}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setTiktokCreator(null);
+        setTiktokCreatorError(data.error ?? "Unable to load TikTok account settings.");
+        return;
+      }
+      const options: string[] = Array.isArray(data.privacyLevelOptions) ? data.privacyLevelOptions : [];
+      setTiktokCreator({ creatorNickname: data.creatorNickname, creatorUsername: data.creatorUsername, privacyLevelOptions: options });
+      setTiktokCreatorError("");
+      setTiktokPrivacy((current) =>
+        current && options.includes(current) ? current : options.includes("SELF_ONLY") ? "SELF_ONLY" : options[0] ?? ""
+      );
+    }
+    void loadTikTokCreator();
+  }, [selectedGroupId, selectedWorkspaceId, selectedGroupHasTikTok]);
 
   useEffect(() => {
     async function loadDrafts() {
@@ -134,7 +175,10 @@ export default function ApprovalsPage() {
         const response = await fetch(`/api/publish/${draft.platform}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ postDraftId: draft.id })
+          body: JSON.stringify({
+            postDraftId: draft.id,
+            ...(draft.platform === "tiktok" && tiktokPrivacy ? { privacyLevel: tiktokPrivacy } : {})
+          })
         });
         const result = await response.json();
         return { draft, ok: response.ok, result };
@@ -219,6 +263,44 @@ export default function ApprovalsPage() {
                 One shared schedule is applied to every platform variant in this draft set after approval.
               </p>
             </div>
+            {selectedGroupHasTikTok ? (
+              <div className="mt-4 rounded-lg border border-line bg-[#f8fafc] p-3.5">
+                <div className="font-semibold">TikTok post settings</div>
+                {tiktokCreator ? (
+                  <>
+                    <p className={`${fieldNoteClass} mt-1`}>
+                      Posting as {tiktokCreator.creatorNickname || tiktokCreator.creatorUsername || "your connected TikTok account"}.
+                    </p>
+                    <label className="mt-3 block max-w-[360px]">
+                      Who can view this post
+                      <span className="relative block">
+                        <select
+                          className="appearance-none pr-10"
+                          value={tiktokPrivacy}
+                          onChange={(event) => setTiktokPrivacy(event.target.value)}
+                        >
+                          {tiktokCreator.privacyLevelOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {TIKTOK_PRIVACY_LABELS[option] ?? option}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown
+                          aria-hidden="true"
+                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted"
+                          size={18}
+                        />
+                      </span>
+                    </label>
+                    <p className={`${fieldNoteClass} mt-2`}>
+                      By posting, you confirm this content follows TikTok&apos;s Community Guidelines and Music Usage Confirmation.
+                    </p>
+                  </>
+                ) : (
+                  <p className={`${fieldNoteClass} mt-1`}>{tiktokCreatorError || "Loading TikTok account settings..."}</p>
+                )}
+              </div>
+            ) : null}
             <div className={formActionsClass}>
               <Button onClick={() => void transitionDraftGroup("approved", "approved.")} type="button">
                 <Check size={16} /> Approve draft set

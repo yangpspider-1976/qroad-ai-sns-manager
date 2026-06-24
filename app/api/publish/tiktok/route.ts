@@ -7,7 +7,10 @@ import { publicOrigin } from "@/lib/http/public-url";
 import { fetchTikTokCreatorInfo, uploadTikTokPhotoPost } from "@/lib/platform/tiktok/tiktok";
 
 const publishSchema = z.object({
-  postDraftId: z.string()
+  postDraftId: z.string(),
+  // Privacy level the creator selected in the UI (TikTok UX requirement). We
+  // still validate it against the account's allowed options before using it.
+  privacyLevel: z.string().optional()
 });
 
 function absolutePublicUrl(pathOrUrl: string, request: Request) {
@@ -19,6 +22,15 @@ function absolutePublicUrl(pathOrUrl: string, request: Request) {
     throw new Error("TikTok cannot pull localhost images. Deploy so images are served from a public HTTPS URL.");
   }
   return url.toString();
+}
+
+// TikTok only pulls images from a verified domain. Our images live on Vercel
+// Blob (unverifiable), so route them through the proxy on our verified app
+// domain. Already-same-origin URLs are returned unchanged.
+function tiktokPullableUrl(imageUrl: string, request: Request) {
+  const origin = publicOrigin(request);
+  if (new URL(imageUrl).origin === origin) return imageUrl;
+  return `${origin}/api/media/proxy?src=${encodeURIComponent(imageUrl)}`;
 }
 
 function buildTitle(draft: ReturnType<typeof mapPostDraft>) {
@@ -115,7 +127,7 @@ export async function POST(request: Request) {
   let imageUrl: string;
 
   try {
-    imageUrl = absolutePublicUrl(asset.url, request);
+    imageUrl = tiktokPullableUrl(absolutePublicUrl(asset.url, request), request);
   } catch (error) {
     const message = error instanceof Error ? error.message : "TikTok image URL validation failed.";
     return NextResponse.json({ error: message }, { status: 409 });
@@ -129,8 +141,15 @@ export async function POST(request: Request) {
     }
 
     const creatorInfo = postMode === "DIRECT_POST" ? await fetchTikTokCreatorInfo(account.tokenEncrypted) : null;
+    const privacyOptions = creatorInfo?.privacy_level_options ?? [];
+    // Honor the creator's selection when it's a valid option; otherwise fall
+    // back to the safest configured default.
     const privacyLevel =
-      postMode === "DIRECT_POST" ? preferredPrivacyLevel(creatorInfo?.privacy_level_options ?? []) : undefined;
+      postMode === "DIRECT_POST"
+        ? parsed.data.privacyLevel && privacyOptions.includes(parsed.data.privacyLevel)
+          ? parsed.data.privacyLevel
+          : preferredPrivacyLevel(privacyOptions)
+        : undefined;
 
     if (postMode === "DIRECT_POST" && !privacyLevel) {
       throw new Error("TikTok did not return any valid privacy level options for Direct Post.");
