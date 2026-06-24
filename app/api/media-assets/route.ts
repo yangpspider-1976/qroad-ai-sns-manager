@@ -1,7 +1,6 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { storeAsset } from "@/lib/assets/storage";
 import { getDemoUser, prisma } from "@/lib/db/prisma";
 
 const imageTypes = new Map([
@@ -49,7 +48,7 @@ export async function GET(request: Request) {
         : {}),
       NOT: {
         url: {
-          startsWith: "/generated-assets/"
+          contains: "generated-assets/"
         }
       }
     },
@@ -115,8 +114,6 @@ export async function POST(request: Request) {
   const user = await getDemoUser();
   const storedAssets = [];
   const folderId = briefId || postDraftId;
-  const outputDirectory = join(process.cwd(), "public", "uploaded-assets", safeSegment(workspaceId), safeSegment(folderId));
-  await mkdir(outputDirectory, { recursive: true });
 
   for (const [index, file] of files.entries()) {
     const extension = imageTypes.get(file.type);
@@ -126,11 +123,12 @@ export async function POST(request: Request) {
 
     const meta = metadata.data[index];
     const filename = `${Date.now()}-${index + 1}-${safeSegment(file.name.replace(/\.[^.]+$/, ""))}.${extension}`;
-    const outputPath = join(outputDirectory, filename);
     const bytes = Buffer.from(await file.arrayBuffer());
-    await writeFile(outputPath, bytes);
-
-    const url = `/uploaded-assets/${safeSegment(workspaceId)}/${safeSegment(folderId)}/${filename}`;
+    const url = await storeAsset(
+      `uploaded-assets/${safeSegment(workspaceId)}/${safeSegment(folderId)}/${filename}`,
+      bytes,
+      file.type
+    );
     for (const draft of drafts) {
       const asset = await prisma.mediaAsset.create({
         data: {

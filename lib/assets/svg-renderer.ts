@@ -1,7 +1,6 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { PostDraft } from "@/lib/types";
 import { platformAssetPrompt, platformAssetRequirements } from "./platform-assets";
+import { storeAsset } from "./storage";
 
 function escapeXml(value: string) {
   return value
@@ -42,12 +41,7 @@ function renderTextLines(lines: string[], x: number, y: number, fontSize: number
 
 export async function renderDraftAsset(postDraft: PostDraft) {
   const requirement = platformAssetRequirements[postDraft.platform];
-  const outputDirectory = join(process.cwd(), "public", "generated-assets", postDraft.briefId);
-  await mkdir(outputDirectory, { recursive: true });
-
   const filename = `${postDraft.platform}-${requirement.width}x${requirement.height}.svg`;
-  const relativeUrl = `/generated-assets/${postDraft.briefId}/${filename}`;
-  const outputPath = join(outputDirectory, filename);
   const headlineLines = wrapText(postDraft.imageText.headline, postDraft.platform === "tiktok" ? 18 : 26);
   const subtitleLines = wrapText(postDraft.imageText.subtitle, postDraft.platform === "tiktok" ? 28 : 48);
   const margin = Math.round(requirement.width * 0.08);
@@ -68,10 +62,10 @@ export async function renderDraftAsset(postDraft: PostDraft) {
   <text x="${margin + 34}" y="${buttonY + (postDraft.platform === "tiktok" ? 61 : 48)}" font-size="${postDraft.platform === "tiktok" ? 34 : 28}" font-weight="800" fill="#ffffff">${escapeXml(postDraft.imageText.buttonText)}</text>
 </svg>`;
 
-  await writeFile(outputPath, svg, "utf8");
+  const url = await storeAsset(`generated-assets/${postDraft.briefId}/${filename}`, svg, "image/svg+xml");
 
   return {
-    url: relativeUrl,
+    url,
     width: requirement.width,
     height: requirement.height,
     prompt: platformAssetPrompt(postDraft)
