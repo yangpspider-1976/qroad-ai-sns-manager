@@ -237,6 +237,52 @@ export async function fetchMetaUserIdentity(userAccessToken: string): Promise<{ 
   return { id: body.id as string, name: typeof body.name === "string" ? body.name : "" };
 }
 
+/**
+ * Probe what the user token can actually see, for diagnosing "no Pages
+ * returned" failures: the raw /me/accounts result, the businesses the token
+ * can enumerate, and which permissions Graph reports as granted.
+ */
+export async function probeMetaPageAccess(userAccessToken: string) {
+  const accountsParams = new URLSearchParams({ fields: "id,name,tasks", access_token: userAccessToken });
+  const accountsRes = await fetch(graphUrl(`/me/accounts?${accountsParams.toString()}`), { cache: "no-store" });
+  const accountsBody = await accountsRes.json().catch(() => ({} as Record<string, unknown>));
+  const accountsData = Array.isArray((accountsBody as { data?: unknown }).data)
+    ? ((accountsBody as { data: Array<{ id?: string; name?: string }> }).data)
+    : [];
+
+  const permsRes = await fetch(graphUrl(`/me/permissions?access_token=${encodeURIComponent(userAccessToken)}`), {
+    cache: "no-store"
+  });
+  const permsBody = await permsRes.json().catch(() => ({} as Record<string, unknown>));
+  const grantedPermissions = Array.isArray((permsBody as { data?: unknown }).data)
+    ? ((permsBody as { data: Array<{ permission?: string; status?: string }> }).data)
+        .filter((p) => p.status === "granted")
+        .map((p) => p.permission ?? "")
+        .filter(Boolean)
+    : [];
+
+  const bizParams = new URLSearchParams({ fields: "id,name", access_token: userAccessToken });
+  const bizRes = await fetch(graphUrl(`/me/businesses?${bizParams.toString()}`), { cache: "no-store" });
+  const bizBody = await bizRes.json().catch(() => ({} as Record<string, unknown>));
+  const businesses = Array.isArray((bizBody as { data?: unknown }).data)
+    ? ((bizBody as { data: Array<{ id?: string; name?: string }> }).data).map((b) => b.name ?? b.id ?? "?")
+    : [];
+
+  return {
+    accountsStatus: accountsRes.status,
+    accountsCount: accountsData.length,
+    accountsError: typeof (accountsBody as { error?: { message?: string } }).error?.message === "string"
+      ? (accountsBody as { error: { message: string } }).error.message
+      : null,
+    grantedPermissions,
+    businessesCount: businesses.length,
+    businesses,
+    businessesError: typeof (bizBody as { error?: { message?: string } }).error?.message === "string"
+      ? (bizBody as { error: { message: string } }).error.message
+      : null
+  };
+}
+
 export async function fetchManagedFacebookPages(userAccessToken: string, options: { includeInstagram?: boolean } = {}) {
   const fields = ["id", "name", "access_token", "tasks"];
   if (options.includeInstagram) {

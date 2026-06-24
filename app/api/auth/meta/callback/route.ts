@@ -7,7 +7,8 @@ import {
   fetchMetaUserIdentity,
   metaConfigStatus,
   metaOAuthScopesFor,
-  metaUsesBusinessLogin
+  metaUsesBusinessLogin,
+  probeMetaPageAccess
 } from "@/lib/platform/meta/facebook";
 
 function parseMetaState(state: string | null) {
@@ -66,8 +67,15 @@ export async function GET(request: Request) {
     const pages = await fetchManagedFacebookPages(token.accessToken, { includeInstagram: intent === "instagram" });
     if (pages.length === 0) {
       const identity = await fetchMetaUserIdentity(token.accessToken);
+      const probe = await probeMetaPageAccess(token.accessToken);
+      const diagnostics =
+        ` [Diagnostics — /me/accounts HTTP ${probe.accountsStatus}, ${probe.accountsCount} page(s)` +
+        `${probe.accountsError ? `, error: ${probe.accountsError}` : ""}; ` +
+        `granted: ${probe.grantedPermissions.join(", ") || "none"}; ` +
+        `businesses: ${probe.businessesCount}${probe.businesses.length ? ` (${probe.businesses.join(", ")})` : ""}` +
+        `${probe.businessesError ? `, businesses error: ${probe.businessesError}` : ""}]`;
       return NextResponse.redirect(
-        publicUrl(`/settings/integrations?meta=error&message=${encodeURIComponent(buildNoPagesMessage(url, identity))}`, request)
+        publicUrl(`/settings/integrations?meta=error&message=${encodeURIComponent(buildNoPagesMessage(url, identity) + diagnostics)}`, request)
       );
     }
 
