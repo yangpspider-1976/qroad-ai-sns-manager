@@ -12,9 +12,9 @@ export const metadata: Metadata = {
   title: "QROAD AI SNS Manager",
   description: "Internal AI-assisted social media operations dashboard",
   icons: {
-    icon: "/logo.png",
-    shortcut: "/logo.png",
-    apple: "/logo.png"
+    icon: "/qroad.png",
+    shortcut: "/qroad.png",
+    apple: "/qroad.png"
   }
 };
 
