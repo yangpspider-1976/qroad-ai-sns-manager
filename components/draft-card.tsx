@@ -1,11 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { ChevronDown, ImageIcon, Layers, Save, Trash2, Upload } from "lucide-react";
+import { ChevronDown, ImageIcon, Layers, Save, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { RiskBadge, StatusBadge } from "./status-badge";
 import type { Platform, PostDraft } from "@/lib/types";
-import { Button, Notice, actionsClass, fieldNoteClass, sectionHeadingClass } from "./ui";
+import {
+  Button,
+  Notice,
+  actionsClass,
+  fieldNoteClass,
+  sectionHeadingClass,
+} from "./ui";
 
 type DraftAsset = {
   id: string;
@@ -31,7 +37,13 @@ function readImageDimensions(file: File) {
   return new Promise<SelectedImage>((resolve, reject) => {
     const previewUrl = URL.createObjectURL(file);
     const image = new window.Image();
-    image.onload = () => resolve({ file, width: image.naturalWidth, height: image.naturalHeight, previewUrl });
+    image.onload = () =>
+      resolve({
+        file,
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+        previewUrl,
+      });
     image.onerror = () => {
       URL.revokeObjectURL(previewUrl);
       reject(new Error(`Unable to read image dimensions for ${file.name}.`));
@@ -50,14 +62,6 @@ function uniqueAssets(assets: DraftAsset[]) {
   });
 }
 
-const previewMaxHeight = 320;
-
-const platformPreview: Record<Platform, { label: string; aspectRatio: string; ratio: number; hint: string }> = {
-  facebook: { label: "Facebook", aspectRatio: "1200 / 630", ratio: 1200 / 630, hint: "Feed image preview" },
-  instagram: { label: "Instagram", aspectRatio: "1 / 1", ratio: 1, hint: "Square post preview" },
-  tiktok: { label: "TikTok", aspectRatio: "9 / 16", ratio: 9 / 16, hint: "Vertical cover preview" }
-};
-
 export function DraftCard({
   draft,
   editable = false,
@@ -66,7 +70,7 @@ export function DraftCard({
   showWarnings = true,
   titleOverride,
   assetUploadEnabled = false,
-  platformDrafts
+  platformDrafts,
 }: {
   draft: PostDraft;
   editable?: boolean;
@@ -85,36 +89,25 @@ export function DraftCard({
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [isUploadingAssets, setIsUploadingAssets] = useState(false);
   const [isRemovingAssets, setIsRemovingAssets] = useState(false);
-  const [activePlatform, setActivePlatform] = useState<Platform>(draft.platform);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isPersistedDraft = !draft.id.startsWith("preview_");
-  const platformDraftOptions = platformDrafts?.length ? platformDrafts : [draft];
-  const activeDraft = platformDraftOptions.find((item) => item.platform === activePlatform) ?? platformDraftOptions[0] ?? draft;
-  const activePreview = platformPreview[activeDraft.platform];
-  const previewAssets = assets;
-  const uploadedAssetCount = assets.length;
+  const platformDraftOptions = platformDrafts?.length
+    ? platformDrafts
+    : [draft];
   const previewImage = selectedImages[0]
     ? { alt: selectedImages[0].file.name, src: selectedImages[0].previewUrl }
-    : previewAssets[0]
-      ? { alt: previewAssets[0].prompt ?? `${activePreview.label} uploaded image`, src: previewAssets[0].url }
+    : assets[0]
+      ? { alt: assets[0].prompt ?? "Uploaded image", src: assets[0].url }
       : null;
-  const imageCount = selectedImages.length > 0 ? selectedImages.length : previewAssets.length;
+  const imageCount =
+    selectedImages.length > 0 ? selectedImages.length : assets.length;
   const hasRemovableImages = imageCount > 0;
-  const previewFrameClass =
-    activeDraft.platform === "facebook"
-      ? "border-line bg-[#eef6ff]"
-      : "border-slate-900 bg-black";
-  const previewFrameStyle = {
-    aspectRatio: activePreview.aspectRatio,
-    maxWidth: `min(100%, ${Math.round(activePreview.ratio * previewMaxHeight)}px)`
-  };
 
   useEffect(() => {
     setCaption(draft.caption);
     setHashtags(draft.hashtags.join(" "));
     setMessage("");
     setShowAssetDetails(false);
-    setActivePlatform(draft.platform);
     setSelectedImages((current) => {
       current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
       return [];
@@ -127,12 +120,13 @@ export function DraftCard({
         setAssets([]);
         return;
       }
-      const response = await fetch(`/api/media-assets?workspaceId=${draft.workspaceId}&briefId=${draft.briefId}`);
+      const response = await fetch(
+        `/api/media-assets?workspaceId=${draft.workspaceId}&briefId=${draft.briefId}`,
+      );
       if (!response.ok) return;
       const data = await response.json();
       setAssets(uniqueAssets(Array.isArray(data.assets) ? data.assets : []));
     }
-
     void loadAssets();
   }, [draft.briefId, draft.workspaceId, isPersistedDraft]);
 
@@ -148,7 +142,6 @@ export function DraftCard({
       const uploaded = await uploadImages();
       if (!uploaded) return;
     }
-
     const response = await fetch(`/api/post-drafts/brief/${draft.briefId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -157,15 +150,23 @@ export function DraftCard({
         hashtags: hashtags
           .split(/\s+/)
           .map((tag) => tag.trim())
-          .filter(Boolean)
-      })
+          .filter(Boolean),
+      }),
     });
-    setMessage(response.ok ? `Draft${hadPendingImages ? " and images" : ""} saved to database.` : "Draft save failed.");
+    setMessage(
+      response.ok
+        ? `Draft${hadPendingImages ? " and images" : ""} saved to database.`
+        : "Draft save failed.",
+    );
   }
 
   function updateCaption(value: string) {
     setCaption(value);
-    onDraftChange?.({ ...draft, caption: value, hashtags: hashtags.split(/\s+/).filter(Boolean) });
+    onDraftChange?.({
+      ...draft,
+      caption: value,
+      hashtags: hashtags.split(/\s+/).filter(Boolean),
+    });
   }
 
   function updateHashtags(value: string) {
@@ -176,37 +177,54 @@ export function DraftCard({
       hashtags: value
         .split(/\s+/)
         .map((tag) => tag.trim())
-        .filter(Boolean)
+        .filter(Boolean),
     });
   }
 
   async function selectImages(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"));
-    const measuredImages = await Promise.all(imageFiles.map(readImageDimensions));
+    const imageFiles = Array.from(files).filter((file) =>
+      file.type.startsWith("image/"),
+    );
+    const measuredImages = await Promise.all(
+      imageFiles.map(readImageDimensions),
+    );
     setSelectedImages((current) => {
       current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
       return measuredImages;
     });
-    setMessage(`${measuredImages.length} image${measuredImages.length === 1 ? "" : "s"} ready to upload.`);
+    setMessage(
+      `${measuredImages.length} image${measuredImages.length === 1 ? "" : "s"} ready to upload.`,
+    );
   }
 
   async function uploadImages() {
-    if (!isPersistedDraft || activeDraft.id.startsWith("preview_") || selectedImages.length === 0) return false;
+    if (
+      !isPersistedDraft ||
+      draft.id.startsWith("preview_") ||
+      selectedImages.length === 0
+    )
+      return false;
     const uploadCount = selectedImages.length;
     setIsUploadingAssets(true);
     const formData = new FormData();
-    formData.append("workspaceId", activeDraft.workspaceId);
+    formData.append("workspaceId", draft.workspaceId);
     formData.append("briefId", draft.briefId);
     formData.append(
       "metadata",
-      JSON.stringify(selectedImages.map((image) => ({ name: image.file.name, width: image.width, height: image.height })))
+      JSON.stringify(
+        selectedImages.map((image) => ({
+          name: image.file.name,
+          width: image.width,
+          height: image.height,
+        })),
+      ),
     );
     selectedImages.forEach((image) => formData.append("files", image.file));
 
     const response = await fetch("/api/media-assets", {
       method: "POST",
-      body: formData
+      body: formData,
     });
     const result = await response.json().catch(() => ({}));
     setIsUploadingAssets(false);
@@ -215,7 +233,9 @@ export function DraftCard({
       return false;
     }
 
-    const assetResponse = await fetch(`/api/media-assets?workspaceId=${draft.workspaceId}&briefId=${draft.briefId}`);
+    const assetResponse = await fetch(
+      `/api/media-assets?workspaceId=${draft.workspaceId}&briefId=${draft.briefId}`,
+    );
     if (assetResponse.ok) {
       const data = await assetResponse.json();
       setAssets(uniqueAssets(Array.isArray(data.assets) ? data.assets : []));
@@ -228,7 +248,7 @@ export function DraftCard({
       fileInputRef.current.value = "";
     }
     setMessage(
-      `Uploaded ${uploadCount} image${uploadCount === 1 ? "" : "s"} for ${platformDraftOptions.length} platform preview${platformDraftOptions.length === 1 ? "" : "s"}.`
+      `Uploaded ${uploadCount} image${uploadCount === 1 ? "" : "s"} for ${platformDraftOptions.length} platform variant${platformDraftOptions.length === 1 ? "" : "s"}.`,
     );
     return true;
   }
@@ -244,8 +264,8 @@ export function DraftCard({
         fileInputRef.current.value = "";
       }
     }
-    if (uploadedAssetCount === 0) {
-      setMessage("Cleared selected image files.");
+    if (assets.length === 0) {
+      setMessage("Cleared selected image.");
       return;
     }
     setIsRemovingAssets(true);
@@ -254,8 +274,8 @@ export function DraftCard({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         workspaceId: draft.workspaceId,
-        briefId: draft.briefId
-      })
+        briefId: draft.briefId,
+      }),
     });
     const result = await response.json().catch(() => ({}));
     setIsRemovingAssets(false);
@@ -264,14 +284,16 @@ export function DraftCard({
       return;
     }
     setAssets([]);
-    setMessage(`Removed ${uploadedAssetCount} uploaded image record${uploadedAssetCount === 1 ? "" : "s"}.`);
+    setMessage("Image removed.");
   }
 
-  return (
-    <article className="">
+  const textContent = (
+    <>
       <div className={sectionHeadingClass}>
         <div>
-          <h2 className="m-0 text-lg font-bold capitalize">{titleOverride ?? draft.platform}</h2>
+          <h2 className="m-0 text-lg font-bold capitalize">
+            {titleOverride ?? draft.platform}
+          </h2>
           <p className={fieldNoteClass}>{draft.cta}</p>
         </div>
         <div className={actionsClass}>
@@ -281,152 +303,61 @@ export function DraftCard({
       </div>
       <label>
         Caption
-        <textarea value={caption} onChange={(event) => updateCaption(event.target.value)} readOnly={!editable} />
+        <textarea
+          value={caption}
+          onChange={(event) => updateCaption(event.target.value)}
+          readOnly={!editable}
+        />
       </label>
       <div className="mt-3.5 grid gap-4">
         <div>
           <strong>Hashtags</strong>
           {editable ? (
-            <input value={hashtags} onChange={(event) => updateHashtags(event.target.value)} />
+            <input
+              value={hashtags}
+              onChange={(event) => updateHashtags(event.target.value)}
+            />
           ) : (
             <p className={fieldNoteClass}>{hashtags}</p>
           )}
         </div>
-        <div className="grid gap-3 rounded-lg border border-line bg-[#f8fafc] p-3.5">
-          <div>
-            <strong>Uploaded Images</strong>
-            <p className={fieldNoteClass}>
-              Review and upload images by platform.
-            </p>
-          </div>
-          <div className="inline-flex w-fit rounded-lg border border-line bg-white p-1">
-            {platformDraftOptions.map((option) => {
-              const isActive = activeDraft.platform === option.platform;
-              return (
-                <button
-                  aria-pressed={isActive}
-                  className={`inline-flex h-9 cursor-pointer items-center justify-center rounded-md px-4 text-sm font-medium transition ${
-                    isActive ? "bg-[#ebebeb] text-ink" : "text-muted hover:bg-[#f8fafc] hover:text-ink"
-                  }`}
-                  key={option.id}
-                  onClick={() => setActivePlatform(option.platform)}
-                  type="button"
+        {!assetUploadEnabled && assets.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2">
+            {assets.map((asset) => (
+              <div
+                className="rounded-lg border border-line bg-[#f8fafc] p-2"
+                key={asset.id}
+              >
+                <div
+                  className="relative overflow-hidden rounded-md bg-[#eef2ff]"
+                  style={{ aspectRatio: `${asset.width}/${asset.height}` }}
                 >
-                  {platformPreview[option.platform].label}
-                </button>
-              );
-            })}
+                  <Image
+                    alt={asset.prompt ?? "Uploaded draft asset"}
+                    className="object-contain"
+                    fill
+                    src={asset.url}
+                    unoptimized
+                  />
+                </div>
+                <div className={`${fieldNoteClass} mt-2`}>
+                  {asset.width}x{asset.height}
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="grid gap-3 min-[921px]:grid-cols-2">
-            <div className="grid gap-3 rounded-lg border border-line bg-white p-3">
-              <div>
-                <strong>{assetUploadEnabled ? "Choose image files" : `${activePreview.label} images`}</strong>
-                <p className={fieldNoteClass}>
-                  {assetUploadEnabled ? "Upload once and preview the image across each platform tab." : "Submitted images for manager review."}
-                </p>
-              </div>
-              {assetUploadEnabled ? (
-                <>
-              {isPersistedDraft && !activeDraft.id.startsWith("preview_") ? (
-                <>
-                  <label className="flex min-h-[104px] cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-blue-300 bg-blue-50 px-4 py-4 text-center">
-                    <ImageIcon className="mb-2 text-accent" size={24} />
-                    <strong>Choose image files</strong>
-                    <span className={fieldNoteClass}>Single or multiple uploads for all selected platforms.</span>
-                    <input
-                      accept="image/*"
-                      className="sr-only"
-                      multiple
-                      onChange={(event) => void selectImages(event.target.files)}
-                      ref={fileInputRef}
-                      type="file"
-                    />
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      className="w-full"
-                      disabled={selectedImages.length === 0 || isUploadingAssets}
-                      onClick={() => void uploadImages()}
-                      type="button"
-                      variant="secondary"
-                    >
-                      <Upload size={16} /> {isUploadingAssets ? "Uploading..." : "Upload image"}
-                    </Button>
-                    <button
-                      className="inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-4 font-medium leading-[1.2] text-danger no-underline hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-70"
-                      disabled={!hasRemovableImages || isRemovingAssets}
-                      onClick={() => void removeUploadedImages()}
-                      type="button"
-                    >
-                      <Trash2 size={16} /> {isRemovingAssets ? "Removing..." : "Remove images"}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <p className="m-0 text-muted">Save the draft set before uploading images.</p>
-              )}
-                </>
-              ) : previewAssets.length > 0 ? (
-                <div className="grid grid-cols-2 gap-2">
-                  {previewAssets.map((asset) => (
-                    <div className="rounded-lg border border-line bg-[#f8fafc] p-2" key={asset.id}>
-                      <div className="relative overflow-hidden rounded-md bg-[#eef2ff]" style={{ aspectRatio: `${asset.width}/${asset.height}` }}>
-                        <Image alt={asset.prompt ?? "Uploaded draft asset"} className="object-contain" fill src={asset.url} unoptimized />
-                      </div>
-                      <div className={`${fieldNoteClass} mt-2`}>{asset.width}x{asset.height}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="grid min-h-[120px] place-items-center rounded-lg border border-dashed border-line bg-[#f8fafc] p-5 text-center text-muted">
-                  No images submitted for this platform.
-                </div>
-              )}
-            </div>
-            <div className="rounded-lg border border-line bg-white p-3">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <strong>{activePreview.label} preview</strong>
-                  <p className={fieldNoteClass}>{activePreview.hint}</p>
-                </div>
-                <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-bold text-accent-dark">
-                  {imageCount} {selectedImages.length > 0 ? "selected" : "uploaded"}
-                </span>
-              </div>
-              <div className="grid min-h-[360px] place-items-center overflow-hidden rounded-lg border border-line bg-[#f8fafc] p-4">
-                <div className={`relative w-full overflow-hidden rounded-md border ${previewFrameClass}`} style={previewFrameStyle}>
-                  {previewImage ? (
-                    <img alt={previewImage.alt} className="absolute inset-0 h-full w-full object-contain" src={previewImage.src} />
-                  ) : (
-                    <div
-                      className={`absolute inset-0 grid place-items-center p-5 text-center ${
-                        activeDraft.platform === "facebook" ? "text-muted" : "text-slate-100"
-                      }`}
-                    >
-                      <span className="max-w-[80%] leading-6">No {activePreview.label} image selected.</span>
-                    </div>
-                  )}
-                </div>
-                {previewImage ? (
-                  <div className="mt-3 text-center text-xs text-muted">
-                    Fitted to {activePreview.label} preview without cropping.
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </div>
+        ) : null}
         <div className="grid grid-cols-4 gap-3 max-[920px]:grid-cols-2">
-          <div className="inline-flex min-h-6 items-center rounded-full bg-blue-100 px-2 py-[3px] text-xs font-bold text-accent-dark">
+          <div className="inline-flex min-h-6 items-center rounded-full bg-blue-100 px-2 py-0.75 text-xs font-bold text-accent-dark">
             Hook {draft.qualityScore.hook}/10
           </div>
-          <div className="inline-flex min-h-6 items-center rounded-full bg-blue-100 px-2 py-[3px] text-xs font-bold text-accent-dark">
+          <div className="inline-flex min-h-6 items-center rounded-full bg-blue-100 px-2 py-0.75 text-xs font-bold text-accent-dark">
             Clarity {draft.qualityScore.clarity}/10
           </div>
-          <div className="inline-flex min-h-6 items-center rounded-full bg-blue-100 px-2 py-[3px] text-xs font-bold text-accent-dark">
+          <div className="inline-flex min-h-6 items-center rounded-full bg-blue-100 px-2 py-0.75 text-xs font-bold text-accent-dark">
             CTA {draft.qualityScore.cta}/10
           </div>
-          <div className="inline-flex min-h-6 items-center rounded-full bg-blue-100 px-2 py-[3px] text-xs font-bold text-accent-dark">
+          <div className="inline-flex min-h-6 items-center rounded-full bg-blue-100 px-2 py-0.75 text-xs font-bold text-accent-dark">
             Fit {draft.qualityScore.platformFit}/10
           </div>
         </div>
@@ -437,56 +368,65 @@ export function DraftCard({
             type="button"
           >
             <Layers size={15} />
-            {showAssetDetails ? "Hide image text and script" : "Show image text and script"}
-            <ChevronDown className={`transition-transform ${showAssetDetails ? "rotate-180" : ""}`} size={15} />
+            {showAssetDetails
+              ? "Hide image text and script"
+              : "Show image text and script"}
+            <ChevronDown
+              className={`transition-transform ${showAssetDetails ? "rotate-180" : ""}`}
+              size={15}
+            />
           </button>
         </div>
       </div>
       {showAssetDetails ? (
         <div className="mt-3.5 grid gap-3 rounded-lg border border-line bg-[#f8fafc] p-3.5">
           <div>
-          <strong>Image Text</strong>
-          <div className="mt-2 grid gap-2 min-[921px]:grid-cols-3">
-            <div className="rounded-lg border border-line bg-white p-3">
-              <span className={fieldNoteClass}>Headline</span>
-              <p className="m-0 font-semibold">{draft.imageText.headline}</p>
+            <strong>Image Text</strong>
+            <div className="mt-2 grid gap-2 min-[921px]:grid-cols-3">
+              <div className="rounded-lg border border-line bg-white p-3">
+                <span className={fieldNoteClass}>Headline</span>
+                <p className="m-0 font-semibold">{draft.imageText.headline}</p>
+              </div>
+              <div className="rounded-lg border border-line bg-white p-3">
+                <span className={fieldNoteClass}>Subtitle</span>
+                <p className="m-0">{draft.imageText.subtitle}</p>
+              </div>
+              <div className="rounded-lg border border-line bg-white p-3">
+                <span className={fieldNoteClass}>CTA Button</span>
+                <p className="m-0 font-semibold">
+                  {draft.imageText.buttonText}
+                </p>
+              </div>
             </div>
-            <div className="rounded-lg border border-line bg-white p-3">
-              <span className={fieldNoteClass}>Subtitle</span>
-              <p className="m-0">{draft.imageText.subtitle}</p>
-            </div>
-            <div className="rounded-lg border border-line bg-white p-3">
-              <span className={fieldNoteClass}>CTA Button</span>
-              <p className="m-0 font-semibold">{draft.imageText.buttonText}</p>
-            </div>
-          </div>
           </div>
           <div>
-          <strong>Short-Form Video Script</strong>
-          <div className="mt-2 grid gap-2">
-            <div className="rounded-lg border border-line bg-white p-3">
-              <span className={fieldNoteClass}>Hook</span>
-              <p className="m-0 font-semibold">{draft.videoScript.hook}</p>
-            </div>
-            <div className="rounded-lg border border-line bg-white p-3">
-              <span className={fieldNoteClass}>Scenes</span>
-              <ol className="m-0 mt-2 grid gap-1 pl-5">
-                {draft.videoScript.scenes.map((scene, index) => (
-                  <li key={`${draft.id}-scene-${index}`}>{scene}</li>
-                ))}
-              </ol>
-            </div>
-            <div className="grid gap-2 min-[921px]:grid-cols-2">
+            <strong>Short-Form Video Script</strong>
+            <div className="mt-2 grid gap-2">
               <div className="rounded-lg border border-line bg-white p-3">
-                <span className={fieldNoteClass}>Voiceover</span>
-                <p className="m-0">{draft.videoScript.voiceover}</p>
+                <span className={fieldNoteClass}>Hook</span>
+                <p className="m-0 font-semibold">{draft.videoScript.hook}</p>
               </div>
               <div className="rounded-lg border border-line bg-white p-3">
-                <span className={fieldNoteClass}>Thumbnail Text</span>
-                <p className="m-0 font-semibold">{draft.videoScript.thumbnailText}</p>
+                <span className={fieldNoteClass}>Scenes</span>
+                <ol className="m-0 mt-2 grid gap-1 pl-5">
+                  {draft.videoScript.scenes.map((scene, index) => (
+                    <li key={`${draft.id}-scene-${index}`}>{scene}</li>
+                  ))}
+                </ol>
+              </div>
+              <div className="grid gap-2 min-[921px]:grid-cols-2">
+                <div className="rounded-lg border border-line bg-white p-3">
+                  <span className={fieldNoteClass}>Voiceover</span>
+                  <p className="m-0">{draft.videoScript.voiceover}</p>
+                </div>
+                <div className="rounded-lg border border-line bg-white p-3">
+                  <span className={fieldNoteClass}>Thumbnail Text</span>
+                  <p className="m-0 font-semibold">
+                    {draft.videoScript.thumbnailText}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
           </div>
         </div>
       ) : null}
@@ -503,6 +443,92 @@ export function DraftCard({
           {message ? <span className={fieldNoteClass}>{message}</span> : null}
         </div>
       ) : null}
+    </>
+  );
+
+  const imagePanel = (
+    <div>
+      <div className="rounded-lg border border-line bg-[#f8fafc] p-3.5">
+        <strong className="block text-sm">Image</strong>
+        <div className="mt-3">
+          {previewImage ? (
+            <div className="relative overflow-hidden rounded-lg border border-line bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt={previewImage.alt}
+                className="block w-full object-contain"
+                src={previewImage.src}
+              />
+              <button
+                aria-label="Remove image"
+                className="absolute right-2 top-2 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-white disabled:opacity-50"
+                style={{ background: "rgba(0,0,0,0.6)" }}
+                disabled={isRemovingAssets}
+                onClick={() => void removeUploadedImages()}
+                type="button"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <label className="flex min-h-50 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-blue-300 bg-blue-50 px-4 py-8 text-center transition hover:bg-blue-100">
+              <ImageIcon className="mb-2 text-accent" size={28} />
+              <strong className="text-sm">Click to upload</strong>
+              <span className={`${fieldNoteClass} mt-1`}>
+                Single or multiple files, shared across all platforms.
+              </span>
+              <input
+                accept="image/*"
+                className="sr-only"
+                multiple
+                onChange={(event) => void selectImages(event.target.files)}
+                ref={fileInputRef}
+                type="file"
+              />
+            </label>
+          )}
+          {selectedImages.length > 0 && isPersistedDraft ? (
+            <Button
+              className="mt-2 w-full"
+              disabled={isUploadingAssets}
+              onClick={() => void uploadImages()}
+              type="button"
+              variant="secondary"
+            >
+              <Upload size={16} />
+              {isUploadingAssets ? "Uploading..." : "Upload image"}
+            </Button>
+          ) : null}
+          {selectedImages.length > 0 && !isPersistedDraft ? (
+            <p className={`${fieldNoteClass} mt-2`}>
+              Save the draft set to upload this image.
+            </p>
+          ) : null}
+          {message ? (
+            <p className={`${fieldNoteClass} mt-2`}>{message}</p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <article>
+      {assetUploadEnabled ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 288px",
+            gap: "20px",
+            alignItems: "start",
+          }}
+        >
+          <div style={{ minWidth: 0 }}>{textContent}</div>
+          <div>{imagePanel}</div>
+        </div>
+      ) : (
+        textContent
+      )}
     </article>
   );
 }
