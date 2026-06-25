@@ -313,11 +313,12 @@ export const DraftImagePanel = forwardRef<
 
   const isPersistedDraft = !draft.id.startsWith("preview_");
 
-  const displayImage = stagedImages[0]
-    ? { alt: stagedImages[0].file.name, src: stagedImages[0].previewUrl }
-    : !pendingRemoval && assets[0]
-      ? { alt: assets[0].prompt ?? "Uploaded image", src: assets[0].url }
-      : null;
+  const displayImages =
+    stagedImages.length > 0
+      ? stagedImages.map((img) => ({ alt: img.file.name, src: img.previewUrl }))
+      : !pendingRemoval && assets.length > 0
+        ? assets.map((asset) => ({ alt: asset.prompt ?? "Uploaded image", src: asset.url }))
+        : [];
 
   const hasPendingChanges = stagedImages.length > 0 || pendingRemoval;
 
@@ -426,15 +427,15 @@ export const DraftImagePanel = forwardRef<
 
   return (
     <div>
-      {displayImage ? (
+      {displayImages.length > 0 ? (
         <div style={{ position: "relative" }}>
-          <div className="overflow-hidden rounded-lg border border-line bg-white">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              alt={displayImage.alt}
-              className="block w-full object-contain"
-              src={displayImage.src}
-            />
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {displayImages.map((img, i) => (
+              <div className="overflow-hidden rounded-lg border border-line bg-white" key={i}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img alt={img.alt} className="block w-full object-contain" src={img.src} />
+              </div>
+            ))}
           </div>
           {isUploading ? (
             <div
