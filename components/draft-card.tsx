@@ -265,7 +265,7 @@ export function DraftCard({
       }
     }
     if (assets.length === 0) {
-      setMessage("Cleared selected image.");
+      setMessage("");
       return;
     }
     setIsRemovingAssets(true);
@@ -284,7 +284,7 @@ export function DraftCard({
       return;
     }
     setAssets([]);
-    setMessage("Image removed.");
+    setMessage("");
   }
 
   const textContent = (
@@ -520,9 +520,6 @@ export function DraftCard({
             <p className={`${fieldNoteClass} mt-2`}>
               Save the draft set to upload this image.
             </p>
-          ) : null}
-          {message ? (
-            <p className={`${fieldNoteClass} mt-2`}>{message}</p>
           ) : null}
         </div>
       </div>
