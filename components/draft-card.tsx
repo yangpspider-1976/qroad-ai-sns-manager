@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { ChevronDown, ImageIcon, Layers, Save, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { RiskBadge, StatusBadge } from "./status-badge";
 import type { Platform, PostDraft } from "@/lib/types";
 import { Button, Notice, actionsClass, fieldNoteClass, sectionHeadingClass } from "./ui";
@@ -297,13 +297,14 @@ export function DraftCard({
 
 // ─── DraftImagePanel ──────────────────────────────────────────────────────────
 
-export function DraftImagePanel({
-  draft,
-  onPendingRemovalChange,
-}: {
-  draft: PostDraft;
-  onPendingRemovalChange?: (pending: boolean) => void;
-}) {
+export interface DraftImagePanelHandle {
+  commit(): Promise<void>;
+}
+
+export const DraftImagePanel = forwardRef<
+  DraftImagePanelHandle,
+  { draft: PostDraft }
+>(function DraftImagePanel({ draft }, ref) {
   const [assets, setAssets] = useState<DraftAsset[]>([]);
   const [stagedImages, setStagedImages] = useState<SelectedImage[]>([]);
   const [pendingRemoval, setPendingRemoval] = useState(false);
@@ -318,9 +319,10 @@ export function DraftImagePanel({
       ? { alt: assets[0].prompt ?? "Uploaded image", src: assets[0].url }
       : null;
 
+  const hasPendingChanges = stagedImages.length > 0 || pendingRemoval;
+
   useEffect(() => {
     setPendingRemoval(false);
-    onPendingRemovalChange?.(false);
     setStagedImages((current) => {
       current.forEach((img) => URL.revokeObjectURL(img.previewUrl));
       return [];
@@ -346,61 +348,69 @@ export function DraftImagePanel({
     };
   }, [stagedImages]);
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      async commit() {
+        if (!isPersistedDraft || (!stagedImages.length && !pendingRemoval)) return;
+
+        setIsUploading(true);
+
+        // Delete existing DB assets when replacing or removing
+        if (pendingRemoval || (assets.length > 0 && stagedImages.length > 0)) {
+          await fetch("/api/media-assets", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ workspaceId: draft.workspaceId, briefId: draft.briefId }),
+          });
+          setAssets([]);
+          setPendingRemoval(false);
+        }
+
+        if (stagedImages.length > 0) {
+          const formData = new FormData();
+          formData.append("workspaceId", draft.workspaceId);
+          formData.append("briefId", draft.briefId);
+          formData.append(
+            "metadata",
+            JSON.stringify(
+              stagedImages.map((img) => ({ name: img.file.name, width: img.width, height: img.height }))
+            )
+          );
+          stagedImages.forEach((img) => formData.append("files", img.file));
+
+          const response = await fetch("/api/media-assets", { method: "POST", body: formData });
+          if (response.ok) {
+            const assetRes = await fetch(
+              `/api/media-assets?workspaceId=${draft.workspaceId}&briefId=${draft.briefId}`
+            );
+            if (assetRes.ok) {
+              const data = await assetRes.json();
+              setAssets(uniqueAssets(Array.isArray(data.assets) ? data.assets : []));
+            }
+            setStagedImages((current) => {
+              current.forEach((img) => URL.revokeObjectURL(img.previewUrl));
+              return [];
+            });
+            if (fileInputRef.current) fileInputRef.current.value = "";
+          }
+        }
+
+        setIsUploading(false);
+      },
+    }),
+    [isPersistedDraft, stagedImages, pendingRemoval, assets, draft]
+  );
+
   async function handleFileSelect(files: FileList | null) {
     if (!files || files.length === 0) return;
     const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
     if (imageFiles.length === 0) return;
     const measured = await Promise.all(imageFiles.map(readImageDimensions));
-
     setStagedImages((current) => {
       current.forEach((img) => URL.revokeObjectURL(img.previewUrl));
       return measured;
     });
-
-    if (!isPersistedDraft) return; // Show local preview only; upload after saving draft set
-
-    setIsUploading(true);
-
-    // Replace any existing DB assets
-    if (assets.length > 0 || pendingRemoval) {
-      await fetch("/api/media-assets", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId: draft.workspaceId, briefId: draft.briefId }),
-      });
-      setAssets([]);
-      setPendingRemoval(false);
-      onPendingRemovalChange?.(false);
-    }
-
-    const formData = new FormData();
-    formData.append("workspaceId", draft.workspaceId);
-    formData.append("briefId", draft.briefId);
-    formData.append(
-      "metadata",
-      JSON.stringify(
-        measured.map((img) => ({ name: img.file.name, width: img.width, height: img.height }))
-      )
-    );
-    measured.forEach((img) => formData.append("files", img.file));
-
-    const response = await fetch("/api/media-assets", { method: "POST", body: formData });
-    setIsUploading(false);
-
-    if (!response.ok) return; // Keep local preview; user can retry by selecting again
-
-    const assetRes = await fetch(
-      `/api/media-assets?workspaceId=${draft.workspaceId}&briefId=${draft.briefId}`
-    );
-    if (assetRes.ok) {
-      const data = await assetRes.json();
-      setAssets(uniqueAssets(Array.isArray(data.assets) ? data.assets : []));
-    }
-    setStagedImages((current) => {
-      current.forEach((img) => URL.revokeObjectURL(img.previewUrl));
-      return [];
-    });
-    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   function handleRemove() {
@@ -411,11 +421,7 @@ export function DraftImagePanel({
       });
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-    // Mark DB assets as pending removal — no API call; refresh will restore the image
-    if (assets.length > 0) {
-      setPendingRemoval(true);
-      onPendingRemovalChange?.(true);
-    }
+    if (assets.length > 0) setPendingRemoval(true);
   }
 
   return (
@@ -487,13 +493,13 @@ export function DraftImagePanel({
           />
         </label>
       )}
-      {!isPersistedDraft ? (
+      {hasPendingChanges ? (
         <p className={`${fieldNoteClass} mt-2`}>
-          {stagedImages.length > 0
-            ? "Save the draft set to upload this image."
-            : "Save the draft set first, then upload an image here."}
+          {isPersistedDraft ? "Save draft to apply image changes." : "Save the draft set to upload this image."}
         </p>
+      ) : !isPersistedDraft ? (
+        <p className={`${fieldNoteClass} mt-2`}>Save the draft set first, then upload an image here.</p>
       ) : null}
     </div>
   );
-}
+});

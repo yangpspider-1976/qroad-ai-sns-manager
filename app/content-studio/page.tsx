@@ -1,8 +1,8 @@
 "use client";
 
 import { ChevronDown, LoaderCircle, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
-import { DraftCard, DraftImagePanel } from "@/components/draft-card";
+import { useEffect, useRef, useState } from "react";
+import { DraftCard, DraftImagePanel, type DraftImagePanelHandle } from "@/components/draft-card";
 import { Shell } from "@/components/shell";
 import { Button, Modal, Notice, Panel, fieldNoteClass, formActionsClass, formGridClass, sectionHeadingClass } from "@/components/ui";
 import { useSelectedWorkspaceId } from "@/components/workspace-switcher";
@@ -64,7 +64,7 @@ export default function ContentStudioPage() {
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const [activeStudioTab, setActiveStudioTab] = useState<StudioTab>("brief");
   const [selectedDraftGroupId, setSelectedDraftGroupId] = useState("");
-  const [pendingImageRemoval, setPendingImageRemoval] = useState(false);
+  const imagePanelRef = useRef<DraftImagePanelHandle>(null);
 
   const sharedDraft = drafts[0];
   const savedDraftGroups = groupDraftsByBrief(savedDrafts);
@@ -172,13 +172,7 @@ export default function ContentStudioPage() {
   }
 
   async function handleDraftSave() {
-    if (!pendingImageRemoval || !sharedDraft) return;
-    await fetch("/api/media-assets", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspaceId: sharedDraft.workspaceId, briefId: sharedDraft.briefId })
-    });
-    setPendingImageRemoval(false);
+    await imagePanelRef.current?.commit();
   }
 
   function updateDraft(updatedDraft: PostDraft) {
@@ -445,7 +439,7 @@ export default function ContentStudioPage() {
             <Panel>
               <h2 className="m-0 mb-1 text-lg font-bold">Image</h2>
               <p className={`${fieldNoteClass} mb-4`}>Shared across all platforms in this draft set.</p>
-              <DraftImagePanel draft={sharedDraft} key={sharedDraft.id} onPendingRemovalChange={setPendingImageRemoval} />
+              <DraftImagePanel draft={sharedDraft} key={sharedDraft.id} ref={imagePanelRef} />
             </Panel>
           ) : null}
         </div>
