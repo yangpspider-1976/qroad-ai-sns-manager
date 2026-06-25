@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, LoaderCircle, Sparkles } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { DraftCard, DraftImagePanel, type DraftImagePanelHandle } from "@/components/draft-card";
 import { Shell } from "@/components/shell";
@@ -57,7 +57,6 @@ const toneOptions = [
 
 export default function ContentStudioPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const selectedWorkspaceId = useSelectedWorkspaceId();
   const [brief, setBrief] = useState(sampleBrief);
   const [drafts, setDrafts] = useState<PostDraft[]>([]);
@@ -75,7 +74,6 @@ export default function ContentStudioPage() {
   const sharedDraft = drafts[0];
   const savedDraftGroups = groupDraftsByBrief(savedDrafts);
   const imagePreviewHeight = draftPanelHeight ? Math.max(draftPanelHeight - 70, 180) : undefined;
-  const tabParam = searchParams.get("tab");
 
   useEffect(() => {
     setBrief((current) => ({ ...current, workspaceId: selectedWorkspaceId }));
@@ -105,8 +103,29 @@ export default function ContentStudioPage() {
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
-    setActiveStudioTab(tabParam === "drafts" ? "drafts" : "brief");
-  }, [tabParam]);
+    function tabFromLocation() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("tab") === "drafts" ? "drafts" : "brief";
+    }
+
+    function syncTabFromLocation() {
+      setActiveStudioTab(tabFromLocation());
+    }
+
+    function syncTabFromSidebar(event: Event) {
+      const nextTab = (event as CustomEvent<StudioTab>).detail;
+      setActiveStudioTab(nextTab === "drafts" ? "drafts" : "brief");
+    }
+
+    syncTabFromLocation();
+    window.addEventListener("popstate", syncTabFromLocation);
+    window.addEventListener("content-studio-tab-change", syncTabFromSidebar);
+
+    return () => {
+      window.removeEventListener("popstate", syncTabFromLocation);
+      window.removeEventListener("content-studio-tab-change", syncTabFromSidebar);
+    };
+  }, []);
 
   useEffect(() => {
     if (activeStudioTab !== "drafts" || !draftPanelRef.current) {

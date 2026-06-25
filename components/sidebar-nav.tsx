@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   BarChart3,
@@ -64,16 +64,26 @@ export function SidebarNav({
   initialSelectedWorkspaceId?: string;
 }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const contentStudioTab = searchParams.get("tab") === "drafts" ? "drafts" : "brief";
   const isOnContentStudio = pathname === "/content-studio" || pathname.startsWith("/content-studio/");
   const [contentStudioExpanded, setContentStudioExpanded] = useState(isOnContentStudio);
+  const [contentStudioTab, setContentStudioTab] = useState<"brief" | "drafts">("brief");
 
   useEffect(() => {
     if (isOnContentStudio) {
       setContentStudioExpanded(true);
     }
   }, [isOnContentStudio]);
+
+  useEffect(() => {
+    function syncContentStudioTab() {
+      const params = new URLSearchParams(window.location.search);
+      setContentStudioTab(params.get("tab") === "drafts" ? "drafts" : "brief");
+    }
+
+    syncContentStudioTab();
+    window.addEventListener("popstate", syncContentStudioTab);
+    return () => window.removeEventListener("popstate", syncContentStudioTab);
+  }, [pathname]);
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-[264px] overflow-y-auto border-r border-[#e3e3e5] bg-white px-4 py-5 max-[920px]:static max-[920px]:h-auto max-[920px]:w-auto">
@@ -133,6 +143,11 @@ export function SidebarNav({
                             }`}
                             href={child.href}
                             key={child.href}
+                            onClick={() => {
+                              const nextTab = child.tab as "brief" | "drafts";
+                              setContentStudioTab(nextTab);
+                              window.dispatchEvent(new CustomEvent("content-studio-tab-change", { detail: nextTab }));
+                            }}
                           >
                             {child.label}
                           </Link>
