@@ -409,6 +409,7 @@ export default function ContentStudioPage() {
               {sharedDraft ? (
                 <DraftCard
                   draft={sharedDraft}
+                  assetUploadEnabled
                   editable
                   key={sharedDraft.id}
                   onDraftChange={updateDraft}
