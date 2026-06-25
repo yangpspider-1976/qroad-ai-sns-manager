@@ -2,7 +2,7 @@
 
 import { ChevronDown, LoaderCircle, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
-import { DraftCard } from "@/components/draft-card";
+import { DraftCard, DraftImagePanel } from "@/components/draft-card";
 import { Shell } from "@/components/shell";
 import { Button, Modal, Notice, Panel, fieldNoteClass, formActionsClass, formGridClass, sectionHeadingClass } from "@/components/ui";
 import { useSelectedWorkspaceId } from "@/components/workspace-switcher";
@@ -397,39 +397,45 @@ export default function ContentStudioPage() {
             <p className={fieldNoteClass}>Platforms: {platformListLabel(Array.from(new Set(drafts.map((draft) => draft.platform))))}</p>
           ) : null}
         </div>
-        <Panel>
-          <div className="mb-4">
-            <div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "20px", alignItems: "start" }}>
+          <Panel>
+            <div className="mb-4">
               <h2 className="m-0 text-lg font-bold">Generated Drafts</h2>
               <p className={fieldNoteClass}>
                 One shared content record is used across all selected platforms.
               </p>
             </div>
-          </div>
-          <div className="grid gap-3">
-            {sharedDraft ? (
-              <DraftCard
-                draft={sharedDraft}
-                assetUploadEnabled
-                editable
-                key={sharedDraft.id}
-                onDraftChange={updateDraft}
-                platformDrafts={drafts}
-                saveEnabled={!hasUnsavedDraftSet}
-                titleOverride="Shared content"
-              />
-            ) : (
-              <Notice>No generated draft is available yet.</Notice>
-            )}
-          </div>
-          {hasUnsavedDraftSet ? (
-            <div className={formActionsClass}>
-              <Button onClick={() => void saveDraftSet()} type="button">
-                Save draft set
-              </Button>
+            <div className="grid gap-3">
+              {sharedDraft ? (
+                <DraftCard
+                  draft={sharedDraft}
+                  editable
+                  key={sharedDraft.id}
+                  onDraftChange={updateDraft}
+                  platformDrafts={drafts}
+                  saveEnabled={!hasUnsavedDraftSet}
+                  titleOverride="Shared content"
+                />
+              ) : (
+                <Notice>No generated draft is available yet.</Notice>
+              )}
             </div>
+            {hasUnsavedDraftSet ? (
+              <div className={formActionsClass}>
+                <Button onClick={() => void saveDraftSet()} type="button">
+                  Save draft set
+                </Button>
+              </div>
+            ) : null}
+          </Panel>
+          {sharedDraft ? (
+            <Panel>
+              <h2 className="m-0 mb-1 text-lg font-bold">Image</h2>
+              <p className={`${fieldNoteClass} mb-4`}>Shared across all platforms in this draft set.</p>
+              <DraftImagePanel draft={sharedDraft} key={sharedDraft.id} />
+            </Panel>
           ) : null}
-        </Panel>
+        </div>
         </>
         ) : null}
       </div>
