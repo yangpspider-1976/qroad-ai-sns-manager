@@ -1,9 +1,11 @@
 "use client";
 
 import { ChevronDown, LoaderCircle, Sparkles } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { DraftCard, DraftImagePanel, type DraftImagePanelHandle } from "@/components/draft-card";
 import { Shell } from "@/components/shell";
+import { RiskBadge, StatusBadge } from "@/components/status-badge";
 import { Button, Modal, Notice, Panel, fieldNoteClass, formActionsClass, formGridClass, sectionHeadingClass } from "@/components/ui";
 import { useSelectedWorkspaceId } from "@/components/workspace-switcher";
 import { groupDraftsByBrief, platformListLabel } from "@/lib/draft-groups";
@@ -54,6 +56,8 @@ const toneOptions = [
 ];
 
 export default function ContentStudioPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const selectedWorkspaceId = useSelectedWorkspaceId();
   const [brief, setBrief] = useState(sampleBrief);
   const [drafts, setDrafts] = useState<PostDraft[]>([]);
@@ -65,9 +69,13 @@ export default function ContentStudioPage() {
   const [activeStudioTab, setActiveStudioTab] = useState<StudioTab>("brief");
   const [selectedDraftGroupId, setSelectedDraftGroupId] = useState("");
   const imagePanelRef = useRef<DraftImagePanelHandle>(null);
+  const draftPanelRef = useRef<HTMLDivElement>(null);
+  const [draftPanelHeight, setDraftPanelHeight] = useState<number | null>(null);
 
   const sharedDraft = drafts[0];
   const savedDraftGroups = groupDraftsByBrief(savedDrafts);
+  const imagePreviewHeight = draftPanelHeight ? Math.max(draftPanelHeight - 70, 180) : undefined;
+  const tabParam = searchParams.get("tab");
 
   useEffect(() => {
     setBrief((current) => ({ ...current, workspaceId: selectedWorkspaceId }));
@@ -95,6 +103,32 @@ export default function ContentStudioPage() {
 
     void loadDrafts();
   }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    setActiveStudioTab(tabParam === "drafts" ? "drafts" : "brief");
+  }, [tabParam]);
+
+  useEffect(() => {
+    if (activeStudioTab !== "drafts" || !draftPanelRef.current) {
+      setDraftPanelHeight(null);
+      return;
+    }
+
+    const panelElement = draftPanelRef.current;
+    function updateDraftPanelHeight() {
+      setDraftPanelHeight(Math.ceil(panelElement.getBoundingClientRect().height));
+    }
+
+    updateDraftPanelHeight();
+    const observer = new ResizeObserver(updateDraftPanelHeight);
+    observer.observe(panelElement);
+    window.addEventListener("resize", updateDraftPanelHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateDraftPanelHeight);
+    };
+  }, [activeStudioTab, sharedDraft?.id, hasUnsavedDraftSet]);
 
   function updateBrief(field: keyof ContentBrief, value: string) {
     setBrief((current) => ({ ...current, [field]: value }));
@@ -143,6 +177,7 @@ export default function ContentStudioPage() {
     setHasUnsavedDraftSet(true);
     setSelectedDraftGroupId(result.briefId ?? nextDrafts[0]?.briefId ?? "");
     setActiveStudioTab("drafts");
+    router.replace("/content-studio?tab=drafts", { scroll: false });
     setMessage(`Generated an unsaved draft set with ${nextDrafts.length} platform variant${nextDrafts.length === 1 ? "" : "s"}.`);
     setIsGenerating(false);
   }
@@ -212,27 +247,6 @@ export default function ContentStudioPage() {
         </div>
       ) : null}
       <div className="grid grid-cols-1 gap-4">
-        <div className="inline-flex w-fit rounded-lg border border-line bg-white p-1">
-          {[
-            { id: "brief", label: "Content Brief" },
-            { id: "drafts", label: "Generated Drafts" }
-          ].map((tab) => {
-            const isActive = activeStudioTab === tab.id;
-            return (
-              <button
-                aria-pressed={isActive}
-                className={`inline-flex h-9 cursor-pointer items-center justify-center rounded-md px-4 text-sm font-medium transition ${
-                  isActive ? "bg-[#ebebeb] text-ink" : "text-muted hover:bg-[#f8fafc] hover:text-ink"
-                }`}
-                key={tab.id}
-                onClick={() => setActiveStudioTab(tab.id as StudioTab)}
-                type="button"
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
         {activeStudioTab === "brief" ? (
         <Panel>
           <div className={sectionHeadingClass}>
@@ -372,44 +386,44 @@ export default function ContentStudioPage() {
         ) : null}
         {activeStudioTab === "drafts" ? (
         <>
-        <div className="grid gap-3 max-w-[720px]">
-          <label>
-            Draft to edit
-            <span className="relative block">
-              <select
-                className="appearance-none pr-10"
-                disabled={hasUnsavedDraftSet}
-                value={selectedDraftGroupId}
-                onChange={(event) => selectDraftGroup(event.target.value)}
-              >
-                {hasUnsavedDraftSet ? (
-                  <option value={selectedDraftGroupId}>Unsaved draft - {drafts[0]?.imageText.headline ?? "Generated preview"}</option>
-                ) : null}
-                {savedDraftGroups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.title} - {platformListLabel(group.platforms)}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                aria-hidden="true"
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted"
-                size={18}
-              />
-            </span>
-          </label>
-          {drafts.length > 0 ? (
-            <p className={fieldNoteClass}>Platforms: {platformListLabel(Array.from(new Set(drafts.map((draft) => draft.platform))))}</p>
+        <div className="grid gap-3">
+          <div className="flex items-start justify-between gap-4">
+            <label className="max-w-[720px] flex-1">
+              Draft to edit
+              <span className="relative block">
+                <select
+                  className="appearance-none pr-10"
+                  disabled={hasUnsavedDraftSet}
+                  value={selectedDraftGroupId}
+                  onChange={(event) => selectDraftGroup(event.target.value)}
+                >
+                  {hasUnsavedDraftSet ? (
+                    <option value={selectedDraftGroupId}>Unsaved draft - {drafts[0]?.imageText.headline ?? "Generated preview"}</option>
+                  ) : null}
+                  {savedDraftGroups.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.title} - {platformListLabel(group.platforms)}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted"
+                  size={18}
+                />
+              </span>
+            </label>
+          </div>
+          {sharedDraft ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={sharedDraft.status} />
+              <RiskBadge risk={sharedDraft.qualityScore.riskLevel} />
+            </div>
           ) : null}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "20px", alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: "24px", alignItems: "start" }}>
+          <div ref={draftPanelRef}>
           <Panel>
-            <div className="mb-4">
-              <h2 className="m-0 text-lg font-bold">Generated Drafts</h2>
-              <p className={fieldNoteClass}>
-                One shared content record is used across all selected platforms.
-              </p>
-            </div>
             <div className="grid gap-3">
               {sharedDraft ? (
                 <DraftCard
@@ -421,6 +435,7 @@ export default function ContentStudioPage() {
                   onSave={handleDraftSave}
                   platformDrafts={drafts}
                   saveEnabled={!hasUnsavedDraftSet}
+                  hideHeader
                   titleOverride="Shared content"
                 />
               ) : (
@@ -435,12 +450,20 @@ export default function ContentStudioPage() {
               </div>
             ) : null}
           </Panel>
+          </div>
           {sharedDraft ? (
-            <Panel>
-              <h2 className="m-0 mb-1 text-lg font-bold">Image</h2>
-              <p className={`${fieldNoteClass} mb-4`}>Shared across all platforms in this draft set.</p>
-              <DraftImagePanel draft={sharedDraft} key={sharedDraft.id} ref={imagePanelRef} />
+            <div style={draftPanelHeight ? { height: `${draftPanelHeight}px`, minHeight: 0 } : { minHeight: 0 }}>
+            <Panel className="flex h-full min-h-0 flex-col overflow-hidden">
+              <div className="mb-2 text-[13px] text-muted">Image</div>
+              <DraftImagePanel
+                className="flex-1"
+                draft={sharedDraft}
+                key={sharedDraft.id}
+                maxPreviewHeight={imagePreviewHeight}
+                ref={imagePanelRef}
+              />
             </Panel>
+            </div>
           ) : null}
         </div>
         </>
