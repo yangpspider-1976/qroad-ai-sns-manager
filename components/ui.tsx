@@ -81,7 +81,7 @@ export function Modal({
 }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(16,35,31,0.42)] p-6">
-      <div className="w-[min(500px,100%)] overflow-hidden rounded-lg bg-white shadow-[0_18px_60px_rgba(16,35,31,0.22),0_0_0_1px_rgba(0,0,0,0.06)]">
+      <div className="w-[min(560px,100%)] overflow-hidden rounded-lg bg-white shadow-[0_18px_60px_rgba(16,35,31,0.22),0_0_0_1px_rgba(0,0,0,0.06)]">
         <div className="flex items-start justify-between gap-4 px-6 py-6">
           <div>
             <h2 className="m-0 text-[20px] font-medium leading-tight text-ink">{title}</h2>
@@ -97,7 +97,7 @@ export function Modal({
           </button>
         </div>
         {children ? <div className="px-6 pb-6 leading-[1.55] text-ink">{children}</div> : null}
-        <div className="flex items-center justify-end gap-3 border-t border-line bg-[#f8fafc] px-6 py-3">{footer}</div>
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line bg-[#f8fafc] px-6 py-4 [&_button]:min-w-[116px]">{footer}</div>
       </div>
     </div>
   );

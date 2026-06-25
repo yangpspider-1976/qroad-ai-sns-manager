@@ -197,6 +197,7 @@ export default function ContentStudioPage() {
     setSelectedDraftGroupId(result.briefId ?? nextDrafts[0]?.briefId ?? "");
     setActiveStudioTab("drafts");
     router.replace("/content-studio?tab=drafts", { scroll: false });
+    window.dispatchEvent(new CustomEvent("content-studio-tab-change", { detail: "drafts" }));
     setMessage(`Generated an unsaved draft set with ${nextDrafts.length} platform variant${nextDrafts.length === 1 ? "" : "s"}.`);
     setIsGenerating(false);
   }
@@ -504,7 +505,7 @@ export default function ContentStudioPage() {
                 type="button"
                 variant="danger"
               >
-                Continue without saving
+                Discard draft
               </Button>
               <Button
                 onClick={async () => {
@@ -515,7 +516,7 @@ export default function ContentStudioPage() {
                 }}
                 type="button"
               >
-                Save then continue
+                Save and continue
               </Button>
             </>
           }

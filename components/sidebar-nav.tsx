@@ -80,9 +80,18 @@ export function SidebarNav({
       setContentStudioTab(params.get("tab") === "drafts" ? "drafts" : "brief");
     }
 
+    function syncContentStudioTabFromEvent(event: Event) {
+      const nextTab = (event as CustomEvent<"brief" | "drafts">).detail;
+      setContentStudioTab(nextTab === "drafts" ? "drafts" : "brief");
+    }
+
     syncContentStudioTab();
     window.addEventListener("popstate", syncContentStudioTab);
-    return () => window.removeEventListener("popstate", syncContentStudioTab);
+    window.addEventListener("content-studio-tab-change", syncContentStudioTabFromEvent);
+    return () => {
+      window.removeEventListener("popstate", syncContentStudioTab);
+      window.removeEventListener("content-studio-tab-change", syncContentStudioTabFromEvent);
+    };
   }, [pathname]);
 
   return (
