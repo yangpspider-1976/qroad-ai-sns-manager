@@ -452,20 +452,37 @@ export function DraftCard({
         <strong className="block text-sm">Image</strong>
         <div className="mt-3">
           {previewImage ? (
-            <div className="relative overflow-hidden rounded-lg border border-line bg-white">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                alt={previewImage.alt}
-                className="block w-full object-contain"
-                src={previewImage.src}
-              />
+            <div style={{ position: "relative" }}>
+              <div className="overflow-hidden rounded-lg border border-line bg-white">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  alt={previewImage.alt}
+                  className="block w-full object-contain"
+                  src={previewImage.src}
+                />
+              </div>
               <button
                 aria-label="Remove image"
-                className="absolute right-2 top-2 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-white disabled:opacity-50"
-                style={{ background: "rgba(0,0,0,0.6)" }}
                 disabled={isRemovingAssets}
                 onClick={() => void removeUploadedImages()}
                 type="button"
+                style={{
+                  position: "absolute",
+                  top: "8px",
+                  right: "8px",
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "50%",
+                  background: "rgba(0,0,0,0.65)",
+                  color: "white",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 0,
+                  opacity: isRemovingAssets ? 0.5 : 1,
+                }}
               >
                 <X size={14} />
               </button>
