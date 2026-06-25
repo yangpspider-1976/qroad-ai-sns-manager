@@ -64,6 +64,7 @@ export default function ContentStudioPage() {
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const [activeStudioTab, setActiveStudioTab] = useState<StudioTab>("brief");
   const [selectedDraftGroupId, setSelectedDraftGroupId] = useState("");
+  const [pendingImageRemoval, setPendingImageRemoval] = useState(false);
 
   const sharedDraft = drafts[0];
   const savedDraftGroups = groupDraftsByBrief(savedDrafts);
@@ -168,6 +169,16 @@ export default function ContentStudioPage() {
     setHasUnsavedDraftSet(false);
     setMessage("Draft set saved.");
     return true;
+  }
+
+  async function handleDraftSave() {
+    if (!pendingImageRemoval || !sharedDraft) return;
+    await fetch("/api/media-assets", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId: sharedDraft.workspaceId, briefId: sharedDraft.briefId })
+    });
+    setPendingImageRemoval(false);
   }
 
   function updateDraft(updatedDraft: PostDraft) {
@@ -413,6 +424,7 @@ export default function ContentStudioPage() {
                   editable
                   key={sharedDraft.id}
                   onDraftChange={updateDraft}
+                  onSave={handleDraftSave}
                   platformDrafts={drafts}
                   saveEnabled={!hasUnsavedDraftSet}
                   titleOverride="Shared content"
@@ -433,7 +445,7 @@ export default function ContentStudioPage() {
             <Panel>
               <h2 className="m-0 mb-1 text-lg font-bold">Image</h2>
               <p className={`${fieldNoteClass} mb-4`}>Shared across all platforms in this draft set.</p>
-              <DraftImagePanel draft={sharedDraft} key={sharedDraft.id} />
+              <DraftImagePanel draft={sharedDraft} key={sharedDraft.id} onPendingRemovalChange={setPendingImageRemoval} />
             </Panel>
           ) : null}
         </div>

@@ -54,6 +54,7 @@ export function DraftCard({
   draft,
   editable = false,
   onDraftChange,
+  onSave,
   saveEnabled = true,
   showWarnings = false,
   titleOverride,
@@ -62,6 +63,7 @@ export function DraftCard({
   draft: PostDraft;
   editable?: boolean;
   onDraftChange?: (draft: PostDraft) => void;
+  onSave?: () => Promise<void>;
   saveEnabled?: boolean;
   showWarnings?: boolean;
   titleOverride?: string;
@@ -111,7 +113,12 @@ export function DraftCard({
           .filter(Boolean),
       }),
     });
-    setMessage(response.ok ? "Draft saved to database." : "Draft save failed.");
+    if (response.ok) {
+      await onSave?.();
+      setMessage("Draft saved to database.");
+    } else {
+      setMessage("Draft save failed.");
+    }
   }
 
   function updateCaption(value: string) {
@@ -290,7 +297,13 @@ export function DraftCard({
 
 // ─── DraftImagePanel ──────────────────────────────────────────────────────────
 
-export function DraftImagePanel({ draft }: { draft: PostDraft }) {
+export function DraftImagePanel({
+  draft,
+  onPendingRemovalChange,
+}: {
+  draft: PostDraft;
+  onPendingRemovalChange?: (pending: boolean) => void;
+}) {
   const [assets, setAssets] = useState<DraftAsset[]>([]);
   const [stagedImages, setStagedImages] = useState<SelectedImage[]>([]);
   const [pendingRemoval, setPendingRemoval] = useState(false);
@@ -307,6 +320,7 @@ export function DraftImagePanel({ draft }: { draft: PostDraft }) {
 
   useEffect(() => {
     setPendingRemoval(false);
+    onPendingRemovalChange?.(false);
     setStagedImages((current) => {
       current.forEach((img) => URL.revokeObjectURL(img.previewUrl));
       return [];
@@ -356,6 +370,7 @@ export function DraftImagePanel({ draft }: { draft: PostDraft }) {
       });
       setAssets([]);
       setPendingRemoval(false);
+      onPendingRemovalChange?.(false);
     }
 
     const formData = new FormData();
@@ -397,7 +412,10 @@ export function DraftImagePanel({ draft }: { draft: PostDraft }) {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
     // Mark DB assets as pending removal — no API call; refresh will restore the image
-    if (assets.length > 0) setPendingRemoval(true);
+    if (assets.length > 0) {
+      setPendingRemoval(true);
+      onPendingRemovalChange?.(true);
+    }
   }
 
   return (
