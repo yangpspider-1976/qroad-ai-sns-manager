@@ -106,6 +106,7 @@ export function DraftCard({
   showWarnings = false,
   titleOverride,
   assetUploadEnabled = false,
+  showAssetThumbnails = true,
   hideHeader = false,
 }: {
   draft: PostDraft;
@@ -116,6 +117,7 @@ export function DraftCard({
   showWarnings?: boolean;
   titleOverride?: string;
   assetUploadEnabled?: boolean;
+  showAssetThumbnails?: boolean;
   hideHeader?: boolean;
   platformDrafts?: PostDraft[]; // accepted by callers; unused in component body
 }) {
@@ -227,7 +229,7 @@ export function DraftCard({
             <p className={fieldNoteClass}>{hashtags}</p>
           )}
         </label>
-        {!assetUploadEnabled && assets.length > 0 ? (
+        {showAssetThumbnails && !assetUploadEnabled && assets.length > 0 ? (
           <div className="grid grid-cols-2 gap-2">
             {assets.map((asset) => (
               <div
@@ -363,8 +365,8 @@ export interface DraftImagePanelHandle {
 
 export const DraftImagePanel = forwardRef<
   DraftImagePanelHandle,
-  { draft: PostDraft; className?: string; maxPreviewHeight?: number }
->(function DraftImagePanel({ draft, className = "", maxPreviewHeight }, ref) {
+  { draft: PostDraft; className?: string; maxPreviewHeight?: number; readOnly?: boolean }
+>(function DraftImagePanel({ draft, className = "", maxPreviewHeight, readOnly = false }, ref) {
   const [assets, setAssets] = useState<DraftAsset[]>([]);
   const [stagedImages, setStagedImages] = useState<SelectedImage[]>([]);
   const [pendingRemovalAssetIds, setPendingRemovalAssetIds] = useState<
@@ -688,7 +690,7 @@ export const DraftImagePanel = forwardRef<
                   }}
                   type="button"
                 />
-                {stagedImages.length > 0 || activeImage.asset ? (
+                {!readOnly && (stagedImages.length > 0 || activeImage.asset) ? (
                   <button
                     aria-label={`Remove ${activeImage.alt}`}
                     onMouseEnter={() =>
@@ -854,6 +856,14 @@ export const DraftImagePanel = forwardRef<
               <span className={fieldNoteClass}>Uploading…</span>
             </div>
           ) : null}
+        </div>
+      ) : readOnly ? (
+        <div className="flex min-h-50 flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-line bg-[#f8fafc] px-4 py-8 text-center">
+          <ImageIcon className="mb-2 text-muted" size={28} />
+          <strong className="text-sm">No image uploaded</strong>
+          <span className={`${fieldNoteClass} mt-1`}>
+            Uploaded images will appear here for review.
+          </span>
         </div>
       ) : (
         <label
@@ -1069,7 +1079,7 @@ export const DraftImagePanel = forwardRef<
           </div>
         </div>
       ) : null}
-      {!isPersistedDraft && !hasPendingChanges ? (
+      {!readOnly && !isPersistedDraft && !hasPendingChanges ? (
         <p className={`${fieldNoteClass} mt-2`}>
           Save the draft set first, then upload an image here.
         </p>

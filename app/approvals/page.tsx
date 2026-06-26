@@ -2,9 +2,9 @@
 
 import { Check, ChevronDown, Loader2, RotateCcw, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { DraftCard } from "@/components/draft-card";
+import { DraftCard, DraftImagePanel } from "@/components/draft-card";
 import { Shell } from "@/components/shell";
-import { Button, ConfirmationModal, Modal, Notice, Panel, fieldNoteClass, formActionsClass, sectionHeadingClass } from "@/components/ui";
+import { Button, ConfirmationModal, Modal, Notice, Panel, fieldNoteClass, sectionHeadingClass } from "@/components/ui";
 import { useSelectedWorkspaceId } from "@/components/workspace-switcher";
 import { groupDraftsByBrief, platformListLabel } from "@/lib/draft-groups";
 import type { PostDraft, PostStatus } from "@/lib/types";
@@ -26,8 +26,8 @@ function statusListLabel(statuses: PostStatus[]) {
 }
 
 const TIKTOK_PRIVACY_LABELS: Record<string, string> = {
-  PUBLIC_TO_EVERYONE: "Public — everyone",
-  MUTUAL_FOLLOW_FRIENDS: "Friends — mutual follows",
+  PUBLIC_TO_EVERYONE: "Public - everyone",
+  MUTUAL_FOLLOW_FRIENDS: "Friends - mutual follows",
   FOLLOWER_OF_CREATOR: "Followers",
   SELF_ONLY: "Only me (private)"
 };
@@ -41,7 +41,7 @@ type TikTokCreator = {
 export default function ApprovalsPage() {
   const selectedWorkspaceId = useSelectedWorkspaceId();
   const [drafts, setDrafts] = useState<PostDraft[]>([]);
-  const [message, setMessage] = useState("Select an approval action to update the review queue.");
+  const [message, setMessage] = useState("");
   const [pendingReject, setPendingReject] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishOutcome, setPublishOutcome] = useState<PublishOutcome | null>(null);
@@ -66,7 +66,10 @@ export default function ApprovalsPage() {
         return;
       }
       const response = await fetch(`/api/media-assets?workspaceId=${selectedWorkspaceId}&briefId=${selectedGroup.id}`);
-      if (!response.ok) { setSelectedGroupHasImage(false); return; }
+      if (!response.ok) {
+        setSelectedGroupHasImage(false);
+        return;
+      }
       const data = await response.json();
       setSelectedGroupHasImage(Array.isArray(data.assets) && data.assets.length > 0);
     }
@@ -105,7 +108,6 @@ export default function ApprovalsPage() {
       const groups = groupDraftsByBrief(data.drafts);
       setDrafts(data.drafts);
       setSelectedGroupId((current) => (groups.some((group) => group.id === current) ? current : groups[0]?.id ?? ""));
-      setMessage(`Loaded ${groups.length} draft sets for the selected workspace.`);
     }
     void loadDrafts();
   }, [selectedWorkspaceId]);
@@ -194,20 +196,22 @@ export default function ApprovalsPage() {
       error: ok ? undefined : (result.error ?? "Publish failed.")
     }));
 
-    const allOk = platformResults.every((r) => r.ok);
+    const allOk = platformResults.every((result) => result.ok);
     setPublishOutcome({ ok: allOk, results: platformResults });
 
     if (allOk) {
       setDrafts((current) =>
         current.map((draft) =>
-          publishableDrafts.some((d) => d.id === draft.id) ? { ...draft, status: "published" } : draft
+          publishableDrafts.some((publishableDraft) => publishableDraft.id === draft.id)
+            ? { ...draft, status: "published" }
+            : draft
         )
       );
     }
   }
 
   return (
-    <Shell title="Approvals" subtitle="Review captions, asset instructions, scripts, and risk warnings before scheduling.">
+    <Shell title="Approvals" subtitle="Review shared content, uploaded assets, and publishing controls before release.">
       <div className="mb-4 max-w-[720px]">
         <label>
           Draft to review
@@ -234,100 +238,134 @@ export default function ApprovalsPage() {
           <p className={`${fieldNoteClass} mt-3`}>Platforms: {platformListLabel(selectedGroup.platforms)}</p>
         ) : null}
       </div>
+
       <Panel>
         <div className={sectionHeadingClass}>
           <div>
             <h2 className="m-0 text-lg font-bold">Review Queue</h2>
-            <p className={fieldNoteClass}>Scheduling is blocked until a draft reaches Approved status.</p>
+            <p className={fieldNoteClass}>Review one shared content record and its attached assets before approval.</p>
           </div>
         </div>
-        {selectedDraft ? (
-          <div className="mb-4">
-            <DraftCard
-              draft={selectedDraft}
-              platformDrafts={selectedGroup.drafts}
-              showWarnings={false}
-              titleOverride="Shared content"
-            />
-            <div className="mt-4 grid gap-3 rounded-lg border border-line bg-[#f8fafc] p-3.5 min-[921px]:grid-cols-[minmax(260px,360px)_auto]">
-              <label>
-                Schedule
-                <input value={scheduleAt} onChange={(event) => setScheduleAt(event.target.value)} type="datetime-local" />
-              </label>
-              <div className="flex items-end">
-                <Button disabled={!selectedGroupApproved || !scheduleAt} onClick={() => void scheduleDraftGroup()} type="button">
-                  Schedule approved draft
-                </Button>
+
+        {selectedDraft && selectedGroup ? (
+          <div className="grid gap-5 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(340px,420px)]">
+            <div className="min-w-0">
+              <DraftCard
+                draft={selectedDraft}
+                platformDrafts={selectedGroup.drafts}
+                showAssetThumbnails={false}
+                showWarnings={false}
+                titleOverride="Shared Content"
+              />
+
+              <div className="mt-4 grid gap-3 rounded-lg border border-line bg-[#f8fafc] p-3.5 min-[760px]:grid-cols-[minmax(240px,360px)_auto]">
+                <label>
+                  Schedule
+                  <input value={scheduleAt} onChange={(event) => setScheduleAt(event.target.value)} type="datetime-local" />
+                </label>
+                <div className="flex items-end">
+                  <Button disabled={!selectedGroupApproved || !scheduleAt} onClick={() => void scheduleDraftGroup()} type="button">
+                    Schedule approved draft
+                  </Button>
+                </div>
+                <p className={`${fieldNoteClass} min-[760px]:col-span-2`}>
+                  One shared schedule is applied to every platform variant in this draft set after approval.
+                </p>
               </div>
-              <p className={`${fieldNoteClass} min-[921px]:col-span-2`}>
-                One shared schedule is applied to every platform variant in this draft set after approval.
-              </p>
-            </div>
-            {selectedGroupHasTikTok ? (
-              <div className="mt-4 rounded-lg border border-line bg-[#f8fafc] p-3.5">
-                <div className="font-semibold">TikTok post settings</div>
-                {tiktokCreator ? (
-                  <>
-                    <p className={`${fieldNoteClass} mt-1`}>
-                      Posting as {tiktokCreator.creatorNickname || tiktokCreator.creatorUsername || "your connected TikTok account"}.
-                    </p>
-                    <label className="mt-3 block max-w-[360px]">
-                      Who can view this post
-                      <span className="relative block">
-                        <select
-                          className="appearance-none pr-10"
-                          value={tiktokPrivacy}
-                          onChange={(event) => setTiktokPrivacy(event.target.value)}
-                        >
-                          {tiktokCreator.privacyLevelOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {TIKTOK_PRIVACY_LABELS[option] ?? option}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown
-                          aria-hidden="true"
-                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted"
-                          size={18}
-                        />
-                      </span>
-                    </label>
-                    <p className={`${fieldNoteClass} mt-2`}>
-                      By posting, you confirm this content follows TikTok&apos;s Community Guidelines and Music Usage Confirmation.
-                    </p>
-                  </>
-                ) : (
-                  <p className={`${fieldNoteClass} mt-1`}>{tiktokCreatorError || "Loading TikTok account settings..."}</p>
-                )}
-              </div>
-            ) : null}
-            <div className={formActionsClass}>
-              <Button onClick={() => void transitionDraftGroup("approved", "approved.")} type="button">
-                <Check size={16} /> Approve draft set
-              </Button>
-              <Button disabled={!selectedGroupApproved || publishBlocked} onClick={() => void publishDraftGroupNow()} type="button" variant="secondary">
-                Publish now
-              </Button>
-              {publishBlocked ? (
-                <span className={fieldNoteClass}>Upload an image first — Instagram and TikTok require one before publishing.</span>
+
+              {selectedGroupHasTikTok ? (
+                <div className="mt-4 rounded-lg border border-line bg-[#f8fafc] p-3.5">
+                  <div className="font-semibold">TikTok post settings</div>
+                  {tiktokCreator ? (
+                    <>
+                      <p className={`${fieldNoteClass} mt-1`}>
+                        Posting as {tiktokCreator.creatorNickname || tiktokCreator.creatorUsername || "your connected TikTok account"}.
+                      </p>
+                      <label className="mt-3 block max-w-[360px]">
+                        Who can view this post
+                        <span className="relative block">
+                          <select
+                            className="appearance-none pr-10"
+                            value={tiktokPrivacy}
+                            onChange={(event) => setTiktokPrivacy(event.target.value)}
+                          >
+                            {tiktokCreator.privacyLevelOptions.map((option) => (
+                              <option key={option} value={option}>
+                                {TIKTOK_PRIVACY_LABELS[option] ?? option}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown
+                            aria-hidden="true"
+                            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted"
+                            size={18}
+                          />
+                        </span>
+                      </label>
+                      <p className={`${fieldNoteClass} mt-2`}>
+                        By posting, you confirm this content follows TikTok&apos;s Community Guidelines and Music Usage Confirmation.
+                      </p>
+                    </>
+                  ) : (
+                    <p className={`${fieldNoteClass} mt-1`}>{tiktokCreatorError || "Loading TikTok account settings..."}</p>
+                  )}
+                </div>
               ) : null}
-              <Button
-                onClick={() => void transitionDraftGroup("revision_requested", "sent back for revision.")}
-                variant="secondary"
-                type="button"
-              >
-                <RotateCcw size={16} /> Request changes
-              </Button>
-              <Button onClick={() => setPendingReject(true)} variant="danger" type="button">
-                <X size={16} /> Reject
-              </Button>
+
+              <div className="mt-4 rounded-lg border border-line bg-white p-3.5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="m-0 text-base font-bold">Review actions</h3>
+                    <p className={fieldNoteClass}>Approve the draft set before scheduling or publishing.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => void transitionDraftGroup("approved", "approved.")} type="button">
+                      <Check size={16} /> Approve draft set
+                    </Button>
+                    <Button
+                      disabled={!selectedGroupApproved || publishBlocked || isPublishing}
+                      onClick={() => void publishDraftGroupNow()}
+                      type="button"
+                      variant="secondary"
+                    >
+                      Publish now
+                    </Button>
+                    <Button
+                      onClick={() => void transitionDraftGroup("revision_requested", "sent back for revision.")}
+                      variant="secondary"
+                      type="button"
+                    >
+                      <RotateCcw size={16} /> Request changes
+                    </Button>
+                    <Button onClick={() => setPendingReject(true)} variant="danger" type="button">
+                      <X size={16} /> Reject
+                    </Button>
+                  </div>
+                </div>
+                {publishBlocked ? (
+                  <p className={`${fieldNoteClass} mt-3`}>Upload an image first - Instagram and TikTok require one before publishing.</p>
+                ) : null}
+              </div>
             </div>
+
+            <Panel className="flex h-full min-h-[420px] min-w-0 flex-col overflow-hidden">
+              <div className="mb-2 text-[13px] text-muted">Image</div>
+              <DraftImagePanel
+                className="flex-1"
+                draft={selectedDraft}
+                key={selectedDraft.id}
+                maxPreviewHeight={420}
+                readOnly
+              />
+            </Panel>
           </div>
         ) : (
           <Notice className="mb-4">No drafts are available for approval in this workspace.</Notice>
         )}
-        {message ? <Notice className="mt-2">{message}</Notice> : null}
+
+        {message ? <Notice className="mt-4">{message}</Notice> : null}
       </Panel>
+
       {pendingReject && selectedGroup ? (
         <ConfirmationModal
           body="This will archive every platform variant in the selected draft set. It will not delete the original content brief or workspace data."
@@ -341,6 +379,7 @@ export default function ApprovalsPage() {
           title="Reject draft"
         />
       ) : null}
+
       {isPublishing ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(16,35,31,0.42)] p-6">
           <div className="flex w-[min(380px,100%)] flex-col items-center gap-5 rounded-lg bg-white text-center shadow-[0_18px_60px_rgba(16,35,31,0.22)]" style={{ padding: "40px" }}>
@@ -352,6 +391,7 @@ export default function ApprovalsPage() {
           </div>
         </div>
       ) : null}
+
       {publishOutcome ? (
         <Modal
           title={publishOutcome.ok ? "Published successfully" : "Some platforms failed"}
