@@ -248,7 +248,7 @@ export default function ApprovalsPage() {
         </div>
 
         {selectedDraft && selectedGroup ? (
-          <div className="grid gap-5 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(340px,420px)]">
+          <div className="grid gap-6 min-[921px]:grid-cols-2">
             <div className="min-w-0">
               <DraftCard
                 draft={selectedDraft}
