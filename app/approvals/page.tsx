@@ -4,7 +4,7 @@ import { Check, ChevronDown, Loader2, RotateCcw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DraftCard, DraftImagePanel } from "@/components/draft-card";
 import { Shell } from "@/components/shell";
-import { Button, ConfirmationModal, Modal, Notice, Panel, fieldNoteClass, sectionHeadingClass } from "@/components/ui";
+import { Button, ConfirmationModal, Modal, Notice, Panel, fieldNoteClass } from "@/components/ui";
 import { useSelectedWorkspaceId } from "@/components/workspace-switcher";
 import { groupDraftsByBrief, platformListLabel } from "@/lib/draft-groups";
 import type { PostDraft, PostStatus } from "@/lib/types";
@@ -239,23 +239,16 @@ export default function ApprovalsPage() {
         ) : null}
       </div>
 
-      <Panel>
-        <div className={sectionHeadingClass}>
-          <div>
-            <h2 className="m-0 text-lg font-bold">Review Queue</h2>
-            <p className={fieldNoteClass}>Review one shared content record and its attached assets before approval.</p>
-          </div>
-        </div>
-
-        {selectedDraft && selectedGroup ? (
-          <div className="grid gap-6 min-[921px]:grid-cols-2">
+      {selectedDraft && selectedGroup ? (
+        <div className="grid gap-6 min-[921px]:grid-cols-2">
+          <Panel>
             <div className="min-w-0">
               <DraftCard
                 draft={selectedDraft}
+                hideHeader
                 platformDrafts={selectedGroup.drafts}
                 showAssetThumbnails={false}
                 showWarnings={false}
-                titleOverride="Shared Content"
               />
 
               <div className="mt-4 grid gap-3 rounded-lg border border-line bg-[#f8fafc] p-3.5 min-[760px]:grid-cols-[minmax(240px,360px)_auto]">
@@ -348,23 +341,25 @@ export default function ApprovalsPage() {
               </div>
             </div>
 
-            <Panel className="flex h-full min-h-[420px] min-w-0 flex-col overflow-hidden">
-              <div className="mb-2 text-[13px] text-muted">Image</div>
-              <DraftImagePanel
-                className="flex-1"
-                draft={selectedDraft}
-                key={selectedDraft.id}
-                maxPreviewHeight={420}
-                readOnly
-              />
-            </Panel>
-          </div>
-        ) : (
-          <Notice className="mb-4">No drafts are available for approval in this workspace.</Notice>
-        )}
+            {message ? <Notice className="mt-4">{message}</Notice> : null}
+          </Panel>
 
-        {message ? <Notice className="mt-4">{message}</Notice> : null}
-      </Panel>
+          <Panel className="flex h-full min-h-[420px] min-w-0 flex-col overflow-hidden">
+            <div className="mb-2 text-[13px] text-muted">Image</div>
+            <DraftImagePanel
+              className="flex-1"
+              draft={selectedDraft}
+              key={selectedDraft.id}
+              maxPreviewHeight={420}
+              readOnly
+            />
+          </Panel>
+        </div>
+      ) : (
+        <Panel>
+          <Notice className="mb-4">No drafts are available for approval in this workspace.</Notice>
+        </Panel>
+      )}
 
       {pendingReject && selectedGroup ? (
         <ConfirmationModal
